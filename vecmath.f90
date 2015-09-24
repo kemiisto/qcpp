@@ -14,6 +14,7 @@ module vecmath
   type :: vecmath_vector3d
     real(kind=d) :: x, y, z
   contains
+    procedure :: angle      => vecmath_vector3d_angle
     procedure :: is_approx  => vecmath_vector3d_is_approx
     procedure :: norm       => vecmath_vector3d_norm
     procedure :: normalized => vecmath_vector3d_normalized
@@ -45,6 +46,26 @@ module vecmath
 
 
 contains
+
+  ! Angle (in radians) between this vector and the other vector.
+  !
+  ! cos(phi) = e_ji . e_jk
+  pure function vecmath_vector3d_angle(this, other) result(f)
+    class(vecmath_vector3d), intent(in) :: this
+    type(vecmath_vector3d), intent(in) :: other
+    real(kind=d) :: f
+
+    real(kind=d) :: cos_phi
+
+    cos_phi = (this .dot. other) / (this%norm() * other%norm())
+    if (cos_phi < -1.0_d) then
+      cos_phi = -1.0_d
+    else if (cos_phi > 1.0_d) then
+      cos_phi = 1.0_d
+    end if
+
+    f = acos(cos_phi)
+  end function vecmath_vector3d_angle
 
   pure function vecmath_vector3d_is_approx(this, other, tolerance) result(f)
     class(vecmath_vector3d), intent(in) :: this

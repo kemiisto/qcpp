@@ -82,19 +82,16 @@ contains
     integer, intent(in) :: i, j, k
     real(kind=d) :: f
 
-    type(vecmath_vector3d) :: v_i, v_j, v_k, e_ji, e_jk
+    type(vecmath_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
     v_k = this%atoms(k)%atom%position
 
-    e_ji = v_i - v_j
-    e_ji = e_ji%normalized()
-    e_jk = v_k - v_j
-    e_jk = e_jk%normalized()
+    v_ji = v_i - v_j
+    v_jk = v_k - v_j
 
-    ! Shall we do the same numerical accuracy control as in chem_mod_molecule_out_of_plane_angle?
-    f = acos(e_ji .dot. e_jk)
+    f = v_ji%angle(v_jk)
   end function chem_mod_molecule_angle
   
   ! Angle (in radians) for atom i out of the plane containing atoms j-k-l 
@@ -137,6 +134,8 @@ contains
     f = asin(sin_theta)
   end function chem_mod_molecule_out_of_plane_angle
 
+  ! Dihedral (or torsion) angle of four atoms i-j-k-l, i.e. angle between planes i-j-k and j-k-l.
+  ! Calculated as angle between the planes unit normal vectors.
   pure function chem_mod_molecule_dihedral_angle(this, i, j, k, l) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k, l
