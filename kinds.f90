@@ -14,6 +14,7 @@ module kinds
   !   38 approximate exponent range.
   ! integer, parameter :: s = ieee_selected_real_kind(6, 37)
   integer, parameter :: s = selected_real_kind(6, 37)
+  real(kind=s), parameter :: eps_s = epsilon(1.0_s)
 
   ! double-precision floating-point format:
   !   "double" in ieee 754-1985, "binary64" in ieee 754-2008;
@@ -22,5 +23,6 @@ module kinds
   !   308 approximate exponent range.
   ! integer, parameter :: d = ieee_selected_real_kind(15, 307)
   integer, parameter :: d = selected_real_kind(15, 307)
+  real(kind=d), parameter :: eps_d = epsilon(1.0_d)
   
 end module kinds

@@ -76,7 +76,7 @@ contains
 
   ! Angle (in radians) between atoms i-j-k, where j is the central atom.
   !
-  ! cos(phi_ijk) = e_ji . e_jk
+  ! cos(phi_ijk) = e_ji . e_jk = (v_ji . v_jk) / (||v_ji|| ||v_jk||)
   pure function chem_mod_molecule_angle(this, i, j, k) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k
@@ -135,7 +135,7 @@ contains
   end function chem_mod_molecule_out_of_plane_angle
 
   ! Dihedral (or torsion) angle of four atoms i-j-k-l, i.e. angle between planes i-j-k and j-k-l.
-  ! Calculated as angle between the planes unit normal vectors.
+  ! Calculated as angle between the planes normal vectors.
   pure function chem_mod_molecule_dihedral_angle(this, i, j, k, l) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k, l

@@ -14,10 +14,11 @@ module vecmath
   type :: vecmath_vector3d
     real(kind=d) :: x, y, z
   contains
-    procedure :: angle      => vecmath_vector3d_angle
-    procedure :: is_approx  => vecmath_vector3d_is_approx
-    procedure :: norm       => vecmath_vector3d_norm
-    procedure :: normalized => vecmath_vector3d_normalized
+    procedure :: angle                   => vecmath_vector3d_angle
+    procedure :: is_approximately_equal  => vecmath_vector3d_is_approximately_equal
+    procedure :: is_approximately_zero   => vecmath_vector3d_is_approximately_zero
+    procedure :: norm                    => vecmath_vector3d_norm
+    procedure :: normalized              => vecmath_vector3d_normalized
   end type  vecmath_vector3d
 
   interface operator(+)
@@ -44,12 +45,14 @@ module vecmath
     module procedure vecmath_vector3d_cross_vecmath_vector3d
   end interface
 
+  type(vecmath_vector3d), parameter :: &
+    vecmath_vector3d_zero = vecmath_vector3d(0.0_d, 0.0_d, 0.0_d)
 
 contains
 
   ! Angle (in radians) between this vector and the other vector.
   !
-  ! cos(phi) = e_ji . e_jk
+  ! cos(phi) = (v_ji . v_jk) / (  )
   pure function vecmath_vector3d_angle(this, other) result(f)
     class(vecmath_vector3d), intent(in) :: this
     type(vecmath_vector3d), intent(in) :: other
@@ -57,36 +60,63 @@ contains
 
     real(kind=d) :: cos_phi
 
-    cos_phi = (this .dot. other) / (this%norm() * other%norm())
-    if (cos_phi < -1.0_d) then
-      cos_phi = -1.0_d
-    else if (cos_phi > 1.0_d) then
-      cos_phi = 1.0_d
+    ! avoid division by zero for the zero vector 
+    if (this%is_approximately_zero() .or. other%is_approximately_zero()) then
+      cos_phi = 0.0_d
+    else
+      cos_phi = (this .dot. other) / (this%norm() * other%norm())
+      if (cos_phi < -1.0_d) then
+        cos_phi = -1.0_d
+      else if (cos_phi > 1.0_d) then
+        cos_phi = 1.0_d
+      end if
     end if
 
     f = acos(cos_phi)
   end function vecmath_vector3d_angle
 
-  pure function vecmath_vector3d_is_approx(this, other, tolerance) result(f)
+  pure function vecmath_vector3d_is_approximately_equal(this, other, tolerance) result(f)
     class(vecmath_vector3d), intent(in) :: this
     type(vecmath_vector3d), intent(in) :: other
-    real(kind=d), intent(in) :: tolerance
+    real(kind=d), intent(in), optional :: tolerance
     logical :: f
 
     type(vecmath_vector3d) :: diff
 
-    real(kind=d) :: min_norm
+    real(kind=d) :: min_norm, tol
+
+    if (present(tolerance)) then
+      tol = tolerance
+    else
+      tol = eps_d
+    end if
 
     diff = this - other
-
+    
     if (this%norm() <= other%norm()) then
       min_norm = this%norm()
     else
       min_norm = other%norm()
     end if
 
-    f = diff%norm() <= tolerance * min_norm
-  end function vecmath_vector3d_is_approx
+    f = diff%norm() <= tol * min_norm
+  end function vecmath_vector3d_is_approximately_equal
+
+  pure function vecmath_vector3d_is_approximately_zero(this, tolerance) result(f)
+    class(vecmath_vector3d), intent(in) :: this
+    real(kind=d), intent(in), optional :: tolerance
+    logical :: f
+
+    real(kind=d) :: tol
+
+    if (present(tolerance)) then
+      tol = tolerance
+    else
+      tol = eps_d
+    end if
+
+    f = this%is_approximately_equal(vecmath_vector3d_zero, tol)
+  end function vecmath_vector3d_is_approximately_zero
 
   pure function vecmath_vector3d_norm(this) result(f)
     class(vecmath_vector3d), intent(in) :: this
