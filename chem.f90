@@ -142,39 +142,26 @@ contains
     real(kind=d) :: f
 
     type(vecmath_vector3d) :: v_i, v_j, v_k, v_l, &
-      e_ij, e_jk, e_kl, e_ijk, e_jkl, &
+      v_ij, v_jk, v_kl, n_ijk, n_jkl, &
       cross
-    real(kind=d) :: cos_tau
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
     v_k = this%atoms(k)%atom%position
     v_l = this%atoms(l)%atom%position
 
-    e_ij = v_j - v_i
-    e_ij = e_ij%normalized()
-    e_jk = v_k - v_j
-    e_jk = e_jk%normalized()
-    e_kl = v_l - v_k
-    e_kl = e_kl%normalized()
+    v_ij = v_j - v_i
+    v_jk = v_k - v_j
+    v_kl = v_l - v_k
 
-    e_ijk = e_ij .cross. e_jk
-    e_jkl = e_jk .cross. e_kl
+    n_ijk = v_ij .cross. v_jk
+    n_jkl = v_jk .cross. v_kl
 
-    cos_tau = (e_ijk .dot. e_jkl) / (sin(this%angle(i, j, k)) * sin(this%angle(j, k, l)))
-
-    if (cos_tau < -1.0_d) then
-      cos_tau = -1.0_d
-    else if (cos_tau > 1.0_d) then
-      cos_tau = 1.0_d
-    end if
-
-    f = acos(cos_tau)
+    f = n_ijk%angle(n_jkl)
 
     ! sign
-    cross = e_ijk .cross. e_jkl
-    ! cross = cross%normalized()
-    if ((cross .dot. e_ij) < 0.0_d) f = -f
+    cross = n_ijk .cross. n_jkl
+    if ((cross .dot. v_ij) > 0.0_d) f = -f
 
   end function chem_mod_molecule_dihedral_angle
 
