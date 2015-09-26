@@ -56,4 +56,5 @@ endforeach()
 
 message(STATUS "CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
 
+add_executable(test_vecmath kinds.f90 vecmath.f90 test.f90 test_vecmath.f90)
 add_executable(project_01 kinds.f90 vecmath.f90 chem.f90 project_01.f90)
