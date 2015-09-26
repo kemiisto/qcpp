@@ -33,7 +33,7 @@ program project_01
   
   do i = 1, number_of_atoms
     read (1,*) atomic_number, position
-    atom => molecule%atom(i)
+    atom => molecule%atom_pointer(i)
     atom%atomic_number = atomic_number
     atom%position = position
     !molecule%atom(i)%atomic_number = atomic_number
@@ -49,7 +49,7 @@ program project_01
   write (2, '(a,i2)') "Number of atoms:", molecule%number_of_atoms()
   write (2, '(a)') "Input Cartesian coordinates:"
   do i = 1, molecule%number_of_atoms()
-    atom => molecule%atom(i)
+    atom => molecule%atom_pointer(i)
     write (2, '(i3,3f21.12)')          &
       atom%atomic_number, &
       atom%position%x,    &
@@ -119,6 +119,10 @@ program project_01
       end do
     end do
   end do
+
+  position = molecule%center_of_mass()
+  write (2, '(a,3f13.8)') "Molecular center of mass", position%x, position%y, position%z
+  write (2, '(a)') new_line("a")
 
   close(unit=2)
 

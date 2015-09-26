@@ -7,7 +7,7 @@ module chem
 
   private
 
-  public :: chem_mod_atom, chem_mod_molecule
+  public :: chem_mod_atom, chem_mod_molecule, chem_mod_atomic_masses
 
   type chem_mod_atom
     integer :: atomic_number
@@ -25,11 +25,28 @@ module chem
     procedure :: number_of_atoms     => chem_mod_molecule_number_of_atoms
     procedure :: set_number_of_atoms => chem_mod_molecule_set_number_of_atoms
     procedure :: atom                => chem_mod_molecule_atom
+    procedure :: atom_pointer        => chem_mod_molecule_atom_pointer
     procedure :: distance            => chem_mod_molecule_distance
     procedure :: angle               => chem_mod_molecule_angle
     procedure :: out_of_plane_angle  => chem_mod_molecule_out_of_plane_angle
     procedure :: dihedral_angle      => chem_mod_molecule_dihedral_angle
+    procedure :: center_of_mass      => chem_mod_molecule_center_of_mass
   end type chem_mod_molecule
+
+  ! Atomic masses of the most abundant isotopes of the first 10 elements.
+  real(kind=d), dimension(10), parameter :: chem_mod_atomic_masses = &
+  [                          &
+     1.00782503223_d,        &
+     4.00260325413_d,        &
+     7.01600343660_d,        &
+     9.01218306500_d,        &
+    11.00930536000_d,        &
+    12.00000000000_d,        &
+    14.00307400443_d,        &
+    15.99491461957_d,        &
+    18.99840316273_d,        &
+    19.99244017620_d         &
+  ]
 
 contains
 
@@ -53,13 +70,21 @@ contains
     ! deallocate in destructor?
   end subroutine chem_mod_molecule_set_number_of_atoms
 
-  function chem_mod_molecule_atom(this, i) result(f)
+  pure function chem_mod_molecule_atom(this, i) result(f)
+    class(chem_mod_molecule), intent(in) :: this
+    integer, intent(in) :: i
+    type(chem_mod_atom) :: f
+
+    f = this%atoms(i)%atom
+  end function chem_mod_molecule_atom
+
+  function chem_mod_molecule_atom_pointer(this, i) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i
     type(chem_mod_atom), pointer :: f
 
     f => this%atoms(i)%atom
-  end function chem_mod_molecule_atom
+  end function chem_mod_molecule_atom_pointer
 
   pure function chem_mod_molecule_distance(this, i, j) result(f)
     class(chem_mod_molecule), intent(in) :: this
@@ -164,5 +189,31 @@ contains
     if ((cross .dot. v_ij) > 0.0_d) f = -f
 
   end function chem_mod_molecule_dihedral_angle
+
+  pure function chem_mod_molecule_center_of_mass(this) result(f)
+    class(chem_mod_molecule), intent(in) :: this
+    type(vecmath_vector3d) :: f
+
+    integer :: i
+    type(chem_mod_atom) :: atom
+    real(kind=d) :: total_m, total_mx, total_my, total_mz, m
+
+    total_m  = 0.0_d
+    total_mx = 0.0_d
+    total_my = 0.0_d
+    total_mz = 0.0_d
+    do i = 1, this%number_of_atoms()
+      atom = this%atom(i)
+      m = chem_mod_atomic_masses(atom%atomic_number)
+      total_m  = total_m  + m
+      total_mx = total_mx + m * atom%position%x
+      total_my = total_my + m * atom%position%y
+      total_mz = total_mz + m * atom%position%z
+    end do
+
+    f%x = total_mx / total_m
+    f%y = total_my / total_m
+    f%z = total_mz / total_m
+  end function chem_mod_molecule_center_of_mass
 
 end module chem
