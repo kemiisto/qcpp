@@ -14,6 +14,7 @@ program project_01
   integer :: i, j, k, l
   integer :: atomic_number
   type(vecmath_vector3d) :: position
+  real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
 
   if (command_argument_count() /= 2) then
     print *, "Provide input and output file names."
@@ -119,10 +120,17 @@ program project_01
       end do
     end do
   end do
+  write (2, '(a)') new_line("a")
 
   position = molecule%center_of_mass()
-  write (2, '(a,3f13.8)') "Molecular center of mass", position%x, position%y, position%z
+  write (2, '(a,3f13.8)') "Molecular center of mass:", position%x, position%y, position%z
   write (2, '(a)') new_line("a")
+
+  call molecule%translate(-position)
+
+  moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
+  write (2, '(a)') "Moment of inertia tensor (amu bohr^2):"
+  write (2, '(3f13.8)') moment_of_inertia_tensor
 
   close(unit=2)
 

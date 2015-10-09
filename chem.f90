@@ -12,6 +12,8 @@ module chem
   type chem_mod_atom
     integer :: atomic_number
     type(vecmath_vector3d) :: position
+  contains
+    procedure :: set_position => chem_mod_atom_set_position
   end type chem_mod_atom
 
   type chem_mod_atom_pointer
@@ -22,15 +24,17 @@ module chem
     private
     type(chem_mod_atom_pointer), dimension(:), allocatable :: atoms
   contains
-    procedure :: number_of_atoms     => chem_mod_molecule_number_of_atoms
-    procedure :: set_number_of_atoms => chem_mod_molecule_set_number_of_atoms
-    procedure :: atom                => chem_mod_molecule_atom
-    procedure :: atom_pointer        => chem_mod_molecule_atom_pointer
-    procedure :: distance            => chem_mod_molecule_distance
-    procedure :: angle               => chem_mod_molecule_angle
-    procedure :: out_of_plane_angle  => chem_mod_molecule_out_of_plane_angle
-    procedure :: dihedral_angle      => chem_mod_molecule_dihedral_angle
-    procedure :: center_of_mass      => chem_mod_molecule_center_of_mass
+    procedure :: number_of_atoms           => chem_mod_molecule_number_of_atoms
+    procedure :: set_number_of_atoms       => chem_mod_molecule_set_number_of_atoms
+    procedure :: atom                      => chem_mod_molecule_atom
+    procedure :: atom_pointer              => chem_mod_molecule_atom_pointer
+    procedure :: distance                  => chem_mod_molecule_distance
+    procedure :: angle                     => chem_mod_molecule_angle
+    procedure :: out_of_plane_angle        => chem_mod_molecule_out_of_plane_angle
+    procedure :: dihedral_angle            => chem_mod_molecule_dihedral_angle
+    procedure :: center_of_mass            => chem_mod_molecule_center_of_mass
+    procedure :: translate                 => chem_mod_molecule_translate
+    procedure :: moment_of_inertia_tensor  => chem_mod_molecule_moment_of_inertia_tensor
   end type chem_mod_molecule
 
   ! Atomic masses of the most abundant isotopes of the first 10 elements.
@@ -49,6 +53,13 @@ module chem
   ]
 
 contains
+
+  subroutine chem_mod_atom_set_position(this, v)
+    class(chem_mod_atom), intent(inout) :: this
+    type(vecmath_vector3d), intent(in) :: v
+
+    this%position = v
+  end subroutine chem_mod_atom_set_position
 
   pure function chem_mod_molecule_number_of_atoms(this) result(f)
     class(chem_mod_molecule), intent(in) :: this
@@ -215,5 +226,42 @@ contains
     f%y = total_my / total_m
     f%z = total_mz / total_m
   end function chem_mod_molecule_center_of_mass
+
+  subroutine chem_mod_molecule_translate(this, v)
+    class(chem_mod_molecule), intent(inout) :: this
+    type(vecmath_vector3d), intent(in) :: v
+
+    integer :: i
+    type(chem_mod_atom), pointer :: atom
+
+    do i = 1, this%number_of_atoms()
+      atom => this%atom_pointer(i)
+      call atom%set_position(atom%position + v)
+    end do
+  end subroutine chem_mod_molecule_translate
+
+  pure function chem_mod_molecule_moment_of_inertia_tensor(this) result(f)
+    class(chem_mod_molecule), intent(in) :: this
+    real(kind=d), dimension(3, 3) :: f
+
+    integer :: i
+    type(chem_mod_atom) :: atom
+    real(kind=d) :: m
+
+    f = 0.0_d
+    do i = 1, this%number_of_atoms()
+      atom = this%atom(i)
+      m = chem_mod_atomic_masses(atom%atomic_number)
+      f(1, 1) = f(1, 1) + m * (atom%position%y ** 2 + atom%position%z ** 2)
+      f(2, 2) = f(2, 2) + m * (atom%position%x ** 2 + atom%position%z ** 2)
+      f(3, 3) = f(3, 3) + m * (atom%position%x ** 2 + atom%position%y ** 2)
+      f(1, 2) = f(1, 2) + m * atom%position%x * atom%position%y
+      f(1, 3) = f(1, 3) + m * atom%position%x * atom%position%z
+      f(2, 3) = f(2, 3) + m * atom%position%y * atom%position%z
+      f(2, 1) = f(1, 2)
+      f(3, 1) = f(1, 3)
+      f(3, 2) = f(2, 3)
+    end do
+  end function chem_mod_molecule_moment_of_inertia_tensor
 
 end module chem

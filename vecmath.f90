@@ -27,6 +27,7 @@ module vecmath
 
   interface operator(-)
     module procedure vecmath_vector3d_minus_vecmath_vector3d
+    module procedure vecmath_vector3d_negative
   end interface
 
   interface operator(*)
@@ -149,6 +150,15 @@ contains
     f%y = v1%y - v2%y
     f%z = v1%z - v2%z
   end function vecmath_vector3d_minus_vecmath_vector3d
+
+  pure function vecmath_vector3d_negative(v) result(f)
+    type(vecmath_vector3d), intent(in) :: v
+    type(vecmath_vector3d) :: f
+
+    f%x = -v%x
+    f%y = -v%y
+    f%z = -v%z
+  end function vecmath_vector3d_negative
 
   pure function vecmath_vector3d_times_real(v, r) result(f)
     type(vecmath_vector3d), intent(in) :: v
