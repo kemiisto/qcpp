@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 2.8)
 project(01)
 enable_language(Fortran)
 
+if(NOT MINGW)
+  find_package(LAPACK REQUIRED)
+else()
+  set(LAPACK_LIBRARIES "c:/src/lapack/3.5.0-mingw-5.2.0/lib/liblapack.a;c:/src/lapack/3.5.0-mingw-5.2.0/lib/libblas.a")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static")
+endif()
+
 if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
   set(DEBUG_FLAGS -O0)
   set(RELEASE_FLAGS -O2)
@@ -58,3 +65,4 @@ message(STATUS "CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
 
 add_executable(test_vecmath kinds.f90 vecmath.f90 test.F90 test_vecmath.f90)
 add_executable(project_01 kinds.f90 vecmath.f90 chem.f90 project_01.f90)
+target_link_libraries(project_01 ${LAPACK_LIBRARIES})

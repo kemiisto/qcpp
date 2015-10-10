@@ -6,6 +6,8 @@ program project_01
 
   implicit none
 
+  character(len=1), parameter :: tab = char(9)
+
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
   type(chem_mod_molecule) :: molecule
@@ -15,6 +17,7 @@ program project_01
   integer :: atomic_number
   type(vecmath_vector3d) :: position
   real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
+  real(kind=d), dimension(3) :: principal_moments_of_inertia
 
   if (command_argument_count() /= 2) then
     print *, "Provide input and output file names."
@@ -51,7 +54,7 @@ program project_01
   write (2, '(a)') "Input Cartesian coordinates:"
   do i = 1, molecule%number_of_atoms()
     atom => molecule%atom_pointer(i)
-    write (2, '(i3,3f21.12)')          &
+    write (2, '(i2,3f21.12)')          &
       atom%atomic_number, &
       atom%position%x,    &
       atom%position%y,    &
@@ -68,8 +71,8 @@ program project_01
   
   write (2, '(a)') "Bond angles:"
   do i = 1, molecule%number_of_atoms()
-    do j = 1, i - 1
-      do k = 1, j - 1
+    do j = i + 1, molecule%number_of_atoms()
+      do k = j + 1, molecule%number_of_atoms()
         if (molecule%distance(i, j) < 4.0_d .and. molecule%distance(j, k) < 4.0_d) then
           write (2, '(i2,a,i2,a,i2,f11.6)') i - 1, "-", j - 1, "-", k - 1, &
             molecule%angle(i, j, k) * (180.0_d / acos(-1.0_d))
@@ -97,12 +100,12 @@ program project_01
                   write (2, '(i2,a,i2,a,i2,a,i2,f11.6)')       &
                     i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
                     molecule%out_of_plane_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
-
           end if
         end do 
       end do 
     end do 
   end do
+  write (2, '(bn)')
 
   write (2, '(a)') "Torsional angles:"
   do i = 1, molecule%number_of_atoms()
@@ -120,17 +123,26 @@ program project_01
       end do
     end do
   end do
-  write (2, '(a)') new_line("a")
+  write (2, '(bn)')
 
   position = molecule%center_of_mass()
   write (2, '(a,3f13.8)') "Molecular center of mass:", position%x, position%y, position%z
-  write (2, '(a)') new_line("a")
+  write (2, '(bn)')
 
   call molecule%translate(-position)
 
   moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
   write (2, '(a)') "Moment of inertia tensor (amu bohr^2):"
-  write (2, '(3f13.8)') moment_of_inertia_tensor
+  write (2, '(bn)')
+  write (2, '(3i12)') 1, 2, 3
+  write (2, '(bn)')
+  write (2, '(i5,3f13.8)') (i, moment_of_inertia_tensor(i, :), i = 1, 3)
+  write (2, '(bn)')
+
+  principal_moments_of_inertia = molecule%principal_moments_of_inertia()
+  write (2, '(a)') "Principal moments of inertia (amu * bohr^2):"
+  write (2, '(a,3f13.8)') tab, principal_moments_of_inertia
+  write (2, '(bn)')
 
   close(unit=2)
 

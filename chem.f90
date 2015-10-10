@@ -9,6 +9,14 @@ module chem
 
   public :: chem_mod_atom, chem_mod_molecule, chem_mod_atomic_masses
 
+  interface
+    subroutine dsyev(jobz, uplo, n, a, lda, w, work, lwork, info)
+      character        :: jobz, uplo
+      integer          :: info, lda, lwork, n
+      double precision :: a(lda, *), w(*), work(*)
+    end subroutine dsyev
+  end interface
+
   type chem_mod_atom
     integer :: atomic_number
     type(vecmath_vector3d) :: position
@@ -24,17 +32,18 @@ module chem
     private
     type(chem_mod_atom_pointer), dimension(:), allocatable :: atoms
   contains
-    procedure :: number_of_atoms           => chem_mod_molecule_number_of_atoms
-    procedure :: set_number_of_atoms       => chem_mod_molecule_set_number_of_atoms
-    procedure :: atom                      => chem_mod_molecule_atom
-    procedure :: atom_pointer              => chem_mod_molecule_atom_pointer
-    procedure :: distance                  => chem_mod_molecule_distance
-    procedure :: angle                     => chem_mod_molecule_angle
-    procedure :: out_of_plane_angle        => chem_mod_molecule_out_of_plane_angle
-    procedure :: dihedral_angle            => chem_mod_molecule_dihedral_angle
-    procedure :: center_of_mass            => chem_mod_molecule_center_of_mass
-    procedure :: translate                 => chem_mod_molecule_translate
-    procedure :: moment_of_inertia_tensor  => chem_mod_molecule_moment_of_inertia_tensor
+    procedure :: number_of_atoms              => chem_mod_molecule_number_of_atoms
+    procedure :: set_number_of_atoms          => chem_mod_molecule_set_number_of_atoms
+    procedure :: atom                         => chem_mod_molecule_atom
+    procedure :: atom_pointer                 => chem_mod_molecule_atom_pointer
+    procedure :: distance                     => chem_mod_molecule_distance
+    procedure :: angle                        => chem_mod_molecule_angle
+    procedure :: out_of_plane_angle           => chem_mod_molecule_out_of_plane_angle
+    procedure :: dihedral_angle               => chem_mod_molecule_dihedral_angle
+    procedure :: center_of_mass               => chem_mod_molecule_center_of_mass
+    procedure :: translate                    => chem_mod_molecule_translate
+    procedure :: moment_of_inertia_tensor     => chem_mod_molecule_moment_of_inertia_tensor
+    procedure :: principal_moments_of_inertia => chem_mod_molecule_principal_moments_of_inertia
   end type chem_mod_molecule
 
   ! Atomic masses of the most abundant isotopes of the first 10 elements.
@@ -263,5 +272,28 @@ contains
       f(3, 2) = f(2, 3)
     end do
   end function chem_mod_molecule_moment_of_inertia_tensor
+
+  function chem_mod_molecule_principal_moments_of_inertia(this) result(f)
+    class(chem_mod_molecule), intent(in) :: this
+    real(kind=d), dimension(3) :: f
+
+    integer, parameter :: n = 3
+    integer, parameter :: lda = n
+    integer, parameter :: lwmax = 1000
+
+    real(kind=d), dimension(3, 3) :: a
+    integer :: info, lwork
+    real(kind=d), dimension(lwmax) :: work
+
+    a = this%moment_of_inertia_tensor()
+
+    ! Query the optimal workspace.
+    lwork = -1
+    call dsyev('n', 'u', n, a, lda, f, work, lwork, info)
+    lwork = min(lwmax, int(work(1)))
+
+    ! Solve eigenproblem.
+    call dsyev('n', 'u', n, a, lda, f, work, lwork, info)
+  end function chem_mod_molecule_principal_moments_of_inertia
 
 end module chem
