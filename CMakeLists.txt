@@ -5,7 +5,8 @@ enable_language(Fortran)
 if(NOT MINGW)
   find_package(LAPACK REQUIRED)
 else()
-  set(LAPACK_LIBRARIES "c:/src/lapack/3.5.0-mingw-5.2.0/lib/liblapack.a;c:/src/lapack/3.5.0-mingw-5.2.0/lib/libblas.a")
+  set(LAPACK_DIR "c:/developer/libraries/lapack/3.5.0/mingw-builds-5.2.0-64/debug/lib")
+  set(LAPACK_LIBRARIES "${LAPACK_DIR}/liblapack.a;${LAPACK_DIR}/libblas.a")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static")
 endif()
 
@@ -13,11 +14,12 @@ if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
   set(DEBUG_FLAGS -O0)
   set(RELEASE_FLAGS -O2)
   set(STANDARD_FLAGS -std=f2008 -pedantic-errors)
-  # -Wall currently includes (as of GCC 4.9.2)
+  # -Wall currently includes (as of GCC 5.2.0)
   # -Waliasing
   # -Wampersand
   # -Wc-binding-type
   # -Wconversion
+  # -Winteger-division
   # -Wintrinsic-shadow
   # -Wintrinsics-std
   # -Wline-truncation
@@ -27,7 +29,7 @@ if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
   # -Wtarget-lifetime
   # -Wunused
 
-  # -Wextra currently includes (as of GCC 4.9.2)
+  # -Wextra currently includes (as of GCC 5.2.0)
   # -Wcompare-reals
   # -Wunused-parameter
   set(WARNING_FLAGS -Wall -Wextra -Werror
@@ -63,6 +65,5 @@ endforeach()
 
 message(STATUS "CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
 
-add_executable(test_vecmath kinds.f90 vecmath.f90 test.F90 test_vecmath.f90)
-add_executable(project_01 kinds.f90 vecmath.f90 chem.f90 project_01.f90)
+add_executable(project_01 ../fcl/fcl_constants.f90 ../fcl/fcl_kinds.f90 ../fcl/fcl_vecmath_vector_3d.f90 chem.f90 project_01.f90)
 target_link_libraries(project_01 ${LAPACK_LIBRARIES})

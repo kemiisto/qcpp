@@ -1,7 +1,7 @@
 module chem
 
-  use kinds
-  use vecmath
+  use fcl_kinds
+  use fcl_vecmath_vector_3d
 
   implicit none
 
@@ -19,7 +19,7 @@ module chem
 
   type chem_mod_atom
     integer :: atomic_number
-    type(vecmath_vector3d) :: position
+    type(fcl_vecmath_vector3d) :: position
   contains
     procedure :: set_position => chem_mod_atom_set_position
   end type chem_mod_atom
@@ -48,24 +48,24 @@ module chem
 
   ! Atomic masses of the most abundant isotopes of the first 10 elements.
   real(kind=d), dimension(10), parameter :: chem_mod_atomic_masses = &
-  [                          &
-     1.00782503223_d,        &
-     4.00260325413_d,        &
-     7.01600343660_d,        &
-     9.01218306500_d,        &
-    11.00930536000_d,        &
-    12.00000000000_d,        &
-    14.00307400443_d,        &
-    15.99491461957_d,        &
-    18.99840316273_d,        &
-    19.99244017620_d         &
+  [                    &
+     1.00782503223_d,  &
+     4.00260325413_d,  &
+     7.01600343660_d,  &
+     9.01218306500_d,  &
+    11.00930536000_d,  &
+    12.00000000000_d,  &
+    14.00307400443_d,  &
+    15.99491461957_d,  &
+    18.99840316273_d,  &
+    19.99244017620_d   &
   ]
 
 contains
 
   subroutine chem_mod_atom_set_position(this, v)
     class(chem_mod_atom), intent(inout) :: this
-    type(vecmath_vector3d), intent(in) :: v
+    type(fcl_vecmath_vector3d), intent(in) :: v
 
     this%position = v
   end subroutine chem_mod_atom_set_position
@@ -111,12 +111,13 @@ contains
     integer, intent(in) :: i, j
     real(kind=d) :: f
 
-    type(vecmath_vector3d) :: v_i, v_j
+    type(fcl_vecmath_vector3d) :: v_i, v_j
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
 
-    f = sqrt( (v_i%x - v_j%x)**2 + (v_i%y - v_j%y)**2 + (v_i%z - v_j%z)**2 )
+    v_i = v_i - v_j
+    f = v_i%norm()
   end function chem_mod_molecule_distance
 
   ! Angle (in radians) between atoms i-j-k, where j is the central atom.
@@ -127,7 +128,7 @@ contains
     integer, intent(in) :: i, j, k
     real(kind=d) :: f
 
-    type(vecmath_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
+    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
@@ -149,7 +150,7 @@ contains
     integer, intent(in) :: i, j, k, l
     real(kind=d) :: f
 
-    type(vecmath_vector3d) :: v_i, v_j, v_k, v_l, e_kj, e_kl, e_ki
+    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_l, e_kj, e_kl, e_ki
     real(kind=d) :: sin_theta
 
     v_i = this%atoms(i)%atom%position
@@ -186,7 +187,7 @@ contains
     integer, intent(in) :: i, j, k, l
     real(kind=d) :: f
 
-    type(vecmath_vector3d) :: v_i, v_j, v_k, v_l, &
+    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_l, &
       v_ij, v_jk, v_kl, n_ijk, n_jkl, &
       cross
 
@@ -212,7 +213,7 @@ contains
 
   pure function chem_mod_molecule_center_of_mass(this) result(f)
     class(chem_mod_molecule), intent(in) :: this
-    type(vecmath_vector3d) :: f
+    type(fcl_vecmath_vector3d) :: f
 
     integer :: i
     type(chem_mod_atom) :: atom
@@ -226,19 +227,17 @@ contains
       atom = this%atom(i)
       m = chem_mod_atomic_masses(atom%atomic_number)
       total_m  = total_m  + m
-      total_mx = total_mx + m * atom%position%x
-      total_my = total_my + m * atom%position%y
-      total_mz = total_mz + m * atom%position%z
+      total_mx = total_mx + m * atom%position%x()
+      total_my = total_my + m * atom%position%y()
+      total_mz = total_mz + m * atom%position%z()
     end do
 
-    f%x = total_mx / total_m
-    f%y = total_my / total_m
-    f%z = total_mz / total_m
+    f = fcl_vecmath_vector3d([total_mx / total_m, total_my / total_m, total_mz / total_m])
   end function chem_mod_molecule_center_of_mass
 
   subroutine chem_mod_molecule_translate(this, v)
     class(chem_mod_molecule), intent(inout) :: this
-    type(vecmath_vector3d), intent(in) :: v
+    type(fcl_vecmath_vector3d), intent(in) :: v
 
     integer :: i
     type(chem_mod_atom), pointer :: atom
@@ -261,12 +260,12 @@ contains
     do i = 1, this%number_of_atoms()
       atom = this%atom(i)
       m = chem_mod_atomic_masses(atom%atomic_number)
-      f(1, 1) = f(1, 1) + m * (atom%position%y ** 2 + atom%position%z ** 2)
-      f(2, 2) = f(2, 2) + m * (atom%position%x ** 2 + atom%position%z ** 2)
-      f(3, 3) = f(3, 3) + m * (atom%position%x ** 2 + atom%position%y ** 2)
-      f(1, 2) = f(1, 2) + m * atom%position%x * atom%position%y
-      f(1, 3) = f(1, 3) + m * atom%position%x * atom%position%z
-      f(2, 3) = f(2, 3) + m * atom%position%y * atom%position%z
+      f(1, 1) = f(1, 1) + m * (atom%position%y() ** 2 + atom%position%z() ** 2)
+      f(2, 2) = f(2, 2) + m * (atom%position%x() ** 2 + atom%position%z() ** 2)
+      f(3, 3) = f(3, 3) + m * (atom%position%x() ** 2 + atom%position%y() ** 2)
+      f(1, 2) = f(1, 2) + m * atom%position%x() * atom%position%y()
+      f(1, 3) = f(1, 3) + m * atom%position%x() * atom%position%z()
+      f(2, 3) = f(2, 3) + m * atom%position%y() * atom%position%z()
       f(2, 1) = f(1, 2)
       f(3, 1) = f(1, 3)
       f(3, 2) = f(2, 3)

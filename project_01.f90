@@ -1,12 +1,23 @@
 program project_01
 
-  use kinds
-  use vecmath
+  use fcl_constants
+  use fcl_kinds
+  use fcl_vecmath_vector_3d
   use chem
 
   implicit none
 
   character(len=1), parameter :: tab = char(9)
+
+  real(kind=d), parameter :: m_to_angstrom = 1.0d+10
+
+  real(kind=d), parameter :: bohr_to_m = bohr_radius
+  real(kind=d), parameter :: bohr_to_cm = bohr_to_m / centi 
+  real(kind=d), parameter :: bohr_to_angstrom = bohr_to_m * m_to_angstrom
+
+  real(kind=d), parameter :: amu_to_kg = unified_atomic_mass_unit
+  real(kind=d), parameter :: amu_to_g = amu_to_kg * kilo
+  
 
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
@@ -15,9 +26,9 @@ program project_01
   integer :: number_of_atoms
   integer :: i, j, k, l
   integer :: atomic_number
-  type(vecmath_vector3d) :: position
+  type(fcl_vecmath_vector3d) :: position
   real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
-  real(kind=d), dimension(3) :: principal_moments_of_inertia
+  real(kind=d), dimension(3) :: moments_of_inertia
 
   if (command_argument_count() /= 2) then
     print *, "Provide input and output file names."
@@ -55,10 +66,10 @@ program project_01
   do i = 1, molecule%number_of_atoms()
     atom => molecule%atom_pointer(i)
     write (2, '(i2,3f21.12)')          &
-      atom%atomic_number, &
-      atom%position%x,    &
-      atom%position%y,    &
-      atom%position%z
+      atom%atomic_number,   &
+      atom%position%x(),    &
+      atom%position%y(),    &
+      atom%position%z()
   end do
 
   write (2, '(a)') "Interatomic distances (bohr):"
@@ -126,7 +137,7 @@ program project_01
   write (2, '(bn)')
 
   position = molecule%center_of_mass()
-  write (2, '(a,3f13.8)') "Molecular center of mass:", position%x, position%y, position%z
+  write (2, '(a,3f13.8)') "Molecular center of mass:", position%x(), position%y(), position%z()
   write (2, '(bn)')
 
   call molecule%translate(-position)
@@ -139,9 +150,36 @@ program project_01
   write (2, '(i5,3f13.8)') (i, moment_of_inertia_tensor(i, :), i = 1, 3)
   write (2, '(bn)')
 
-  principal_moments_of_inertia = molecule%principal_moments_of_inertia()
+  moments_of_inertia = molecule%principal_moments_of_inertia()
   write (2, '(a)') "Principal moments of inertia (amu * bohr^2):"
-  write (2, '(a,3f13.8)') tab, principal_moments_of_inertia
+  write (2, '(a,3f13.8)') tab, moments_of_inertia
+  write (2, '(bn)')
+
+  write (2, '(a)') "Principal moments of inertia (amu * AA^2):"
+  write (2, '(a,3f13.8)') tab, moments_of_inertia * bohr_to_angstrom ** 2
+  write (2, '(bn)')
+
+  write (2, '(a)') "Principal moments of inertia (g * cm^2):"
+  write (2, '(a,3es18.8)') tab, moments_of_inertia * amu_to_g * bohr_to_cm ** 2
+  write (2, '(bn)')
+
+  ! classify the rotor 
+  if (molecule%number_of_atoms() == 2) then
+    write (2, '(a)') "Molecule is diatomic."
+  else if (moments_of_inertia(1) < 1d-4) then
+    write (2, '(a)') "Molecule is linear."
+  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
+        abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
+    write (2, '(a)') "Molecule is a spherical top."
+  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
+        abs(moments_of_inertia(2) - moments_of_inertia(3)) > 1d-4) then
+    write (2, '(a)') "Molecule is an oblate symmetric top."
+  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) > 1d-4 .and. &
+        abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
+    write (2, '(a)') "Molecule is a prolate symmetric top."
+  else 
+    write (2, '(a)') "Molecule is an asymmetric top."
+  end if
   write (2, '(bn)')
 
   close(unit=2)
