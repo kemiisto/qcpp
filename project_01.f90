@@ -29,6 +29,7 @@ program project_01
   type(fcl_vecmath_vector3d) :: position
   real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
   real(kind=d), dimension(3) :: moments_of_inertia
+  real(kind=d), dimension(3) :: rotational_constants
 
   if (command_argument_count() /= 2) then
     print *, "Provide input and output file names."
@@ -44,15 +45,13 @@ program project_01
   open(unit=1, file=inp_file_name, action="read")
   print *, "Reading input file..."
   read (1,*) number_of_atoms
-  call molecule%set_number_of_atoms(7)
+  call molecule%set_number_of_atoms(number_of_atoms)
   
   do i = 1, number_of_atoms
     read (1,*) atomic_number, position
     atom => molecule%atom_pointer(i)
     atom%atomic_number = atomic_number
     atom%position = position
-    !molecule%atom(i)%atomic_number = atomic_number
-    !molecule%atom(i)%position = position
   end do
   close(unit=1)
   print *, "Done!"
@@ -143,24 +142,24 @@ program project_01
   call molecule%translate(-position)
 
   moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
-  write (2, '(a)') "Moment of inertia tensor (amu bohr^2):"
+  write (2, '(a)') "Moment of inertia tensor:"
   write (2, '(bn)')
   write (2, '(3i12)') 1, 2, 3
   write (2, '(bn)')
-  write (2, '(i5,3f13.8)') (i, moment_of_inertia_tensor(i, :), i = 1, 3)
+  write (2, '(i5,3f13.7)') (i, moment_of_inertia_tensor(i, :), i = 1, 3)
   write (2, '(bn)')
 
   moments_of_inertia = molecule%principal_moments_of_inertia()
   write (2, '(a)') "Principal moments of inertia (amu * bohr^2):"
-  write (2, '(a,3f13.8)') tab, moments_of_inertia
+  write (2, '(a,3f13.6)') tab, moments_of_inertia
   write (2, '(bn)')
 
   write (2, '(a)') "Principal moments of inertia (amu * AA^2):"
-  write (2, '(a,3f13.8)') tab, moments_of_inertia * bohr_to_angstrom ** 2
+  write (2, '(a,3f13.6)') tab, moments_of_inertia * bohr_to_angstrom ** 2
   write (2, '(bn)')
 
   write (2, '(a)') "Principal moments of inertia (g * cm^2):"
-  write (2, '(a,3es18.8)') tab, moments_of_inertia * amu_to_g * bohr_to_cm ** 2
+  write (2, '(a,3es13.6)') tab, moments_of_inertia * amu_to_g * bohr_to_cm ** 2
   write (2, '(bn)')
 
   ! classify the rotor 
@@ -169,18 +168,34 @@ program project_01
   else if (moments_of_inertia(1) < 1d-4) then
     write (2, '(a)') "Molecule is linear."
   else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
-        abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
+      abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
     write (2, '(a)') "Molecule is a spherical top."
   else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
-        abs(moments_of_inertia(2) - moments_of_inertia(3)) > 1d-4) then
+      abs(moments_of_inertia(2) - moments_of_inertia(3)) > 1d-4) then
     write (2, '(a)') "Molecule is an oblate symmetric top."
   else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) > 1d-4 .and. &
-        abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
+      abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
     write (2, '(a)') "Molecule is a prolate symmetric top."
   else 
     write (2, '(a)') "Molecule is an asymmetric top."
   end if
   write (2, '(bn)')
+
+  ! Convert moments of inertian to SI units
+  moments_of_inertia = moments_of_inertia * amu_to_kg * bohr_to_m ** 2
+  ! Calculate rotational constants in SI units
+  rotational_constants = planck_constant / (8 * pi ** 2 * speed_of_light_in_vacuum * moments_of_inertia)
+  write (2, '(a)') "Rotational constants (MHz):"
+  write (2, '(3(a,a4,f10.3))') &
+    tab, "A = ", rotational_constants(1) * speed_of_light_in_vacuum / mega, &
+    tab, "B = ", rotational_constants(2) * speed_of_light_in_vacuum / mega, &
+    tab, "C = ", rotational_constants(3) * speed_of_light_in_vacuum / mega
+  write (2, '(bn)')
+  write (2, '(a)') "Rotational constants (cm-1):"
+  write (2, '(3(a,a4,f6.4))') &
+    tab, "A = ", rotational_constants(1) * centi, &
+    tab, "B = ", rotational_constants(2) * centi, &
+    tab, "C = ", rotational_constants(3) * centi
 
   close(unit=2)
 
