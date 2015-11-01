@@ -9,17 +9,9 @@ module chem
 
   public :: chem_mod_atom, chem_mod_molecule, chem_mod_atomic_masses
 
-  interface
-    subroutine dsyev(jobz, uplo, n, a, lda, w, work, lwork, info)
-      character        :: jobz, uplo
-      integer          :: info, lda, lwork, n
-      double precision :: a(lda, *), w(*), work(*)
-    end subroutine dsyev
-  end interface
-
   type chem_mod_atom
     integer :: atomic_number
-    type(fcl_vecmath_vector3d) :: position
+    type(fcl_vecmath_mod_vector3d) :: position
   contains
     procedure :: set_position => chem_mod_atom_set_position
   end type chem_mod_atom
@@ -43,11 +35,10 @@ module chem
     procedure :: center_of_mass               => chem_mod_molecule_center_of_mass
     procedure :: translate                    => chem_mod_molecule_translate
     procedure :: moment_of_inertia_tensor     => chem_mod_molecule_moment_of_inertia_tensor
-    procedure :: principal_moments_of_inertia => chem_mod_molecule_principal_moments_of_inertia
   end type chem_mod_molecule
 
-  ! Atomic masses of the most abundant isotopes of the first 10 elements.
-  real(kind=d), dimension(10), parameter :: chem_mod_atomic_masses = &
+  ! Atomic masses of the most abundant isotopes of the first 18 elements.
+  real(kind=d), dimension(18), parameter :: chem_mod_atomic_masses = &
   [                    &
      1.00782503223_d,  &
      4.00260325413_d,  &
@@ -58,14 +49,22 @@ module chem
     14.00307400443_d,  &
     15.99491461957_d,  &
     18.99840316273_d,  &
-    19.99244017620_d   &
-  ]
+    19.99244017620_d,  &
+    22.98976928200_d,  &
+    23.98504169700_d,  &
+    26.98153853000_d,  &
+    27.97692653465_d,  &
+    30.97376199842_d,  &
+    31.97207117440_d,  &
+    34.96885268200_d,  &
+    39.96238312370_d   &
+  ]   
 
 contains
 
   subroutine chem_mod_atom_set_position(this, v)
     class(chem_mod_atom), intent(inout) :: this
-    type(fcl_vecmath_vector3d), intent(in) :: v
+    type(fcl_vecmath_mod_vector3d), intent(in) :: v
 
     this%position = v
   end subroutine chem_mod_atom_set_position
@@ -111,7 +110,7 @@ contains
     integer, intent(in) :: i, j
     real(kind=d) :: f
 
-    type(fcl_vecmath_vector3d) :: v_i, v_j
+    type(fcl_vecmath_mod_vector3d) :: v_i, v_j
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
@@ -128,7 +127,7 @@ contains
     integer, intent(in) :: i, j, k
     real(kind=d) :: f
 
-    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
+    type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
@@ -150,7 +149,7 @@ contains
     integer, intent(in) :: i, j, k, l
     real(kind=d) :: f
 
-    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_l, e_kj, e_kl, e_ki
+    type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_l, e_kj, e_kl, e_ki
     real(kind=d) :: sin_theta
 
     v_i = this%atoms(i)%atom%position
@@ -187,7 +186,7 @@ contains
     integer, intent(in) :: i, j, k, l
     real(kind=d) :: f
 
-    type(fcl_vecmath_vector3d) :: v_i, v_j, v_k, v_l, &
+    type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_l, &
       v_ij, v_jk, v_kl, n_ijk, n_jkl, &
       cross
 
@@ -213,7 +212,7 @@ contains
 
   pure function chem_mod_molecule_center_of_mass(this) result(f)
     class(chem_mod_molecule), intent(in) :: this
-    type(fcl_vecmath_vector3d) :: f
+    type(fcl_vecmath_mod_vector3d) :: f
 
     integer :: i
     type(chem_mod_atom) :: atom
@@ -232,12 +231,12 @@ contains
       total_mz = total_mz + m * atom%position%z()
     end do
 
-    f = fcl_vecmath_vector3d([total_mx / total_m, total_my / total_m, total_mz / total_m])
+    f = fcl_vecmath_mod_vector3d([total_mx / total_m, total_my / total_m, total_mz / total_m])
   end function chem_mod_molecule_center_of_mass
 
   subroutine chem_mod_molecule_translate(this, v)
     class(chem_mod_molecule), intent(inout) :: this
-    type(fcl_vecmath_vector3d), intent(in) :: v
+    type(fcl_vecmath_mod_vector3d), intent(in) :: v
 
     integer :: i
     type(chem_mod_atom), pointer :: atom
@@ -271,28 +270,5 @@ contains
       f(3, 2) = f(2, 3)
     end do
   end function chem_mod_molecule_moment_of_inertia_tensor
-
-  function chem_mod_molecule_principal_moments_of_inertia(this) result(f)
-    class(chem_mod_molecule), intent(in) :: this
-    real(kind=d), dimension(3) :: f
-
-    integer, parameter :: n = 3
-    integer, parameter :: lda = n
-    integer, parameter :: lwmax = 1000
-
-    real(kind=d), dimension(3, 3) :: a
-    integer :: info, lwork
-    real(kind=d), dimension(lwmax) :: work
-
-    a = this%moment_of_inertia_tensor()
-
-    ! Query the optimal workspace.
-    lwork = -1
-    call dsyev('n', 'u', n, a, lda, f, work, lwork, info)
-    lwork = min(lwmax, int(work(1)))
-
-    ! Solve eigenproblem.
-    call dsyev('n', 'u', n, a, lda, f, work, lwork, info)
-  end function chem_mod_molecule_principal_moments_of_inertia
 
 end module chem

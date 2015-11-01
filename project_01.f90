@@ -2,12 +2,16 @@ program project_01
 
   use fcl_constants
   use fcl_kinds
+  use fcl_lapack
   use fcl_vecmath_vector_3d
   use chem
 
   implicit none
 
+  character(len=79), parameter :: separator = repeat("-", 79)
   character(len=1), parameter :: tab = char(9)
+  integer, parameter :: inp_file_unit = 1
+  integer, parameter :: out_file_unit = 2
 
   real(kind=d), parameter :: m_to_angstrom = 1.0d+10
 
@@ -18,17 +22,15 @@ program project_01
   real(kind=d), parameter :: amu_to_kg = unified_atomic_mass_unit
   real(kind=d), parameter :: amu_to_g = amu_to_kg * kilo
   
-
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
   type(chem_mod_molecule) :: molecule
   type(chem_mod_atom), pointer :: atom
   integer :: number_of_atoms
-  integer :: i, j, k, l
   integer :: atomic_number
-  type(fcl_vecmath_vector3d) :: position
+  type(fcl_vecmath_mod_vector3d) :: position
   real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
-  real(kind=d), dimension(3) :: moments_of_inertia
+  real(kind=d), dimension(3) :: principal_moments_of_inertia
   real(kind=d), dimension(3) :: rotational_constants
 
   if (command_argument_count() /= 2) then
@@ -39,166 +41,235 @@ program project_01
   call get_command_argument(1, inp_file_name)
   call get_command_argument(2, out_file_name)
 
+  print *, separator
   print *, " Input file: ", trim(inp_file_name)
   print *, "Output file: ", trim(out_file_name)
+  print *, separator
 
-  open(unit=1, file=inp_file_name, action="read")
-  print *, "Reading input file..."
-  read (1,*) number_of_atoms
-  call molecule%set_number_of_atoms(number_of_atoms)
+  open(unit=inp_file_unit, file=inp_file_name, action="read")
+  call read_geometry()
+  close(unit=inp_file_unit)
+
+  open(unit=out_file_unit, file=out_file_name, action="write")
+  call write_geometry()
+  call write_distances()
+  call write_angles()
+  call write_out_of_plane_angles()
+  call write_torsional_angles()
+  call translate_molecule_to_center_of_mass()
+
+  print *, "Calculating moment of inertia tensor..."
+  moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
+  call write_moment_of_inertia_tensor()
+
+  print *, "Calculating principal moments of inertia..."
+  call fcl_lapack_dsyev(moment_of_inertia_tensor, principal_moments_of_inertia)
+  call write_principal_moments_of_inertia()
   
-  do i = 1, number_of_atoms
-    read (1,*) atomic_number, position
-    atom => molecule%atom_pointer(i)
-    atom%atomic_number = atomic_number
-    atom%position = position
-  end do
-  close(unit=1)
-  print *, "Done!"
+  call classify_rotor()
 
-  open(unit=2, file=out_file_name, action="write")
+  print *, "Calculating rotational constants..."
+  ! Convert moments of inertia to SI units
+  principal_moments_of_inertia = principal_moments_of_inertia * amu_to_kg * bohr_to_m ** 2
+  ! Calculate rotational constants in SI units
+  rotational_constants = planck_constant / (8 * pi ** 2 * speed_of_light_in_vacuum * principal_moments_of_inertia)
+  call write_rotational_constants()
 
-  print *, "Doing calculations..."
+  close(unit=out_file_unit)
+  print *, separator
 
-  write (2, '(a,i2)') "Number of atoms:", molecule%number_of_atoms()
-  write (2, '(a)') "Input Cartesian coordinates:"
-  do i = 1, molecule%number_of_atoms()
-    atom => molecule%atom_pointer(i)
-    write (2, '(i2,3f21.12)')          &
-      atom%atomic_number,   &
-      atom%position%x(),    &
-      atom%position%y(),    &
-      atom%position%z()
-  end do
+contains
 
-  write (2, '(a)') "Interatomic distances (bohr):"
-  do i = 2, molecule%number_of_atoms()
-    do j = 1, i - 1
-      write (2, '(2i2,f9.5)') i - 1, j - 1, molecule%distance(i, j)
+  subroutine read_geometry()
+    integer :: i
+
+    print *, "Reading input file..."
+    read (inp_file_unit,*) number_of_atoms
+    call molecule%set_number_of_atoms(number_of_atoms)
+    
+    do i = 1, number_of_atoms
+      read (inp_file_unit,*) atomic_number, position
+      atom => molecule%atom_pointer(i)
+      atom%atomic_number = atomic_number
+      atom%position = position
     end do
-  end do
-  write (2, '(bn)')
-  
-  write (2, '(a)') "Bond angles:"
-  do i = 1, molecule%number_of_atoms()
-    do j = i + 1, molecule%number_of_atoms()
-      do k = j + 1, molecule%number_of_atoms()
-        if (molecule%distance(i, j) < 4.0_d .and. molecule%distance(j, k) < 4.0_d) then
-          write (2, '(i2,a,i2,a,i2,f11.6)') i - 1, "-", j - 1, "-", k - 1, &
-            molecule%angle(i, j, k) * (180.0_d / acos(-1.0_d))
-        end if
+  end subroutine read_geometry
+
+  subroutine write_geometry()
+    integer :: i
+
+    print *, "Writing geometry..."
+    write (out_file_unit, "(a,i2)") "Number of atoms:", molecule%number_of_atoms()
+    write (out_file_unit, "(a)") "Input Cartesian coordinates:"
+
+    do i = 1, molecule%number_of_atoms()
+      atom => molecule%atom_pointer(i)
+      write (out_file_unit, "(i2,3f21.12)")          &
+        atom%atomic_number,   &
+        atom%position%x(),    &
+        atom%position%y(),    &
+        atom%position%z()
+    end do
+  end subroutine write_geometry
+
+  subroutine write_distances()
+    integer :: i, j
+
+    print *, "Writing distances..."
+
+    write (out_file_unit, "(a)") "Interatomic distances (bohr):"
+    do i = 2, molecule%number_of_atoms()
+      do j = 1, i - 1
+        write (out_file_unit, "(2i2,f9.5)") i - 1, j - 1, molecule%distance(i, j)
       end do
     end do
-  end do
-  write (2, '(bn)')
+    write (out_file_unit, "(bn)")
+  end subroutine write_distances
 
-  write (2, '(a)') "Out-of-plane angles:"
-  do i = 1, molecule%number_of_atoms()
-    do k = 1, molecule%number_of_atoms()
-      do j = 1, molecule%number_of_atoms()
-        do l = 1, j - 1
-          ! i /= j /= k /= l
-          ! can be written as
-          ! i /= j .and. i /= k .and. i /= l .and.
-          ! j /= k .and. j /= l .and.
-          ! k /= l
-          ! besides j /= l is already guaranteed by the loop do l = 1, j - 1
-          if (i /= j .and. i /= k .and. i /= l .and. j /= k .and. k /= l                           &
-            .and. molecule%distance(i, k) < 4.0_d                                                  &
-              .and. molecule%distance(j, k) < 4.0_d                                                &
-                .and. molecule%distance(l, k) < 4.0_d) then
-                  write (2, '(i2,a,i2,a,i2,a,i2,f11.6)')       &
-                    i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
-                    molecule%out_of_plane_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
-          end if
-        end do 
-      end do 
-    end do 
-  end do
-  write (2, '(bn)')
+  subroutine write_angles()
+    integer :: i, j, k
 
-  write (2, '(a)') "Torsional angles:"
-  do i = 1, molecule%number_of_atoms()
-    do j = 1, i - 1
-      do k = 1, j - 1
-        do l = 1, k - 1
-          if (molecule%distance(i, j) < 4.0_d &
-                .and. molecule%distance(j, k) < 4.0_d &
-                  .and. molecule%distance(k, l) < 4.0_d) then
-            write (2, '(i2,a,i2,a,i2,a,i2,f11.6)')       &
-              i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
-            molecule%dihedral_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
+    print *, "Writing angles..."
+
+    write (out_file_unit, "(a)") "Bond angles:"
+    do i = 1, molecule%number_of_atoms()
+      do j = i + 1, molecule%number_of_atoms()
+        do k = j + 1, molecule%number_of_atoms()
+          if (molecule%distance(i, j) < 4.0_d .and. molecule%distance(j, k) < 4.0_d) then
+            write (out_file_unit, "(i2,a,i2,a,i2,f11.6)") i - 1, "-", j - 1, "-", k - 1, &
+              molecule%angle(i, j, k) * (180.0_d / acos(-1.0_d))
           end if
         end do
       end do
     end do
-  end do
-  write (2, '(bn)')
+    write (out_file_unit, "(bn)")
+  end subroutine write_angles
 
-  position = molecule%center_of_mass()
-  write (2, '(a,3f13.8)') "Molecular center of mass:", position%x(), position%y(), position%z()
-  write (2, '(bn)')
+  subroutine write_out_of_plane_angles()
+    integer :: i, j, k, l
 
-  call molecule%translate(-position)
+    print *, "Writing out-of-plane angles..."
 
-  moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
-  write (2, '(a)') "Moment of inertia tensor:"
-  write (2, '(bn)')
-  write (2, '(3i12)') 1, 2, 3
-  write (2, '(bn)')
-  write (2, '(i5,3f13.7)') (i, moment_of_inertia_tensor(i, :), i = 1, 3)
-  write (2, '(bn)')
+    write (out_file_unit, "(a)") "Out-of-plane angles:"
+    do i = 1, molecule%number_of_atoms()
+      do k = 1, molecule%number_of_atoms()
+        do j = 1, molecule%number_of_atoms()
+          do l = 1, j - 1
+            ! i /= j /= k /= l
+            ! can be written as
+            ! i /= j .and. i /= k .and. i /= l .and.
+            ! j /= k .and. j /= l .and.
+            ! k /= l
+            ! besides j /= l is already guaranteed by the loop do l = 1, j - 1
+            if (i /= j .and. i /= k .and. i /= l .and. j /= k .and. k /= l  &
+              .and. molecule%distance(i, k) < 4.0_d                         &
+                .and. molecule%distance(j, k) < 4.0_d                       &
+                  .and. molecule%distance(l, k) < 4.0_d) then
+                    write (out_file_unit, "(i2,a,i2,a,i2,a,i2,f11.6)")      &
+                      i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
+                      molecule%out_of_plane_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
+            end if
+          end do 
+        end do 
+      end do 
+    end do
+    write (out_file_unit, "(bn)")
+  end subroutine write_out_of_plane_angles
 
-  moments_of_inertia = molecule%principal_moments_of_inertia()
-  write (2, '(a)') "Principal moments of inertia (amu * bohr^2):"
-  write (2, '(a,3f13.6)') tab, moments_of_inertia
-  write (2, '(bn)')
+  subroutine write_torsional_angles()
+    integer :: i, j, k, l
 
-  write (2, '(a)') "Principal moments of inertia (amu * AA^2):"
-  write (2, '(a,3f13.6)') tab, moments_of_inertia * bohr_to_angstrom ** 2
-  write (2, '(bn)')
+    print *, "Writing torsional angles..."
 
-  write (2, '(a)') "Principal moments of inertia (g * cm^2):"
-  write (2, '(a,3es13.6)') tab, moments_of_inertia * amu_to_g * bohr_to_cm ** 2
-  write (2, '(bn)')
+    write (out_file_unit, "(a)") "Torsional angles:"
+    do i = 1, molecule%number_of_atoms()
+      do j = 1, i - 1
+        do k = 1, j - 1
+          do l = 1, k - 1
+            if (molecule%distance(i, j) < 4.0_d &
+                  .and. molecule%distance(j, k) < 4.0_d &
+                    .and. molecule%distance(k, l) < 4.0_d) then
+              write (out_file_unit, "(i2,a,i2,a,i2,a,i2,f11.6)")  &
+                i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
+              molecule%dihedral_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
+            end if
+          end do
+        end do
+      end do
+    end do
+    write (out_file_unit, "(bn)")
+  end subroutine write_torsional_angles
 
-  ! classify the rotor 
-  if (molecule%number_of_atoms() == 2) then
-    write (2, '(a)') "Molecule is diatomic."
-  else if (moments_of_inertia(1) < 1d-4) then
-    write (2, '(a)') "Molecule is linear."
-  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
-      abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
-    write (2, '(a)') "Molecule is a spherical top."
-  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) < 1d-4 .and. &
-      abs(moments_of_inertia(2) - moments_of_inertia(3)) > 1d-4) then
-    write (2, '(a)') "Molecule is an oblate symmetric top."
-  else if (abs(moments_of_inertia(1) - moments_of_inertia(2)) > 1d-4 .and. &
-      abs(moments_of_inertia(2) - moments_of_inertia(3)) < 1d-4) then
-    write (2, '(a)') "Molecule is a prolate symmetric top."
-  else 
-    write (2, '(a)') "Molecule is an asymmetric top."
-  end if
-  write (2, '(bn)')
+  subroutine translate_molecule_to_center_of_mass()
+    print *, "Translating molecule to center of mass..."
 
-  ! Convert moments of inertian to SI units
-  moments_of_inertia = moments_of_inertia * amu_to_kg * bohr_to_m ** 2
-  ! Calculate rotational constants in SI units
-  rotational_constants = planck_constant / (8 * pi ** 2 * speed_of_light_in_vacuum * moments_of_inertia)
-  write (2, '(a)') "Rotational constants (MHz):"
-  write (2, '(3(a,a4,f10.3))') &
-    tab, "A = ", rotational_constants(1) * speed_of_light_in_vacuum / mega, &
-    tab, "B = ", rotational_constants(2) * speed_of_light_in_vacuum / mega, &
-    tab, "C = ", rotational_constants(3) * speed_of_light_in_vacuum / mega
-  write (2, '(bn)')
-  write (2, '(a)') "Rotational constants (cm-1):"
-  write (2, '(3(a,a4,f6.4))') &
-    tab, "A = ", rotational_constants(1) * centi, &
-    tab, "B = ", rotational_constants(2) * centi, &
-    tab, "C = ", rotational_constants(3) * centi
+    position = molecule%center_of_mass()
+    write (out_file_unit, "(a,3f13.8)") "Molecular center of mass:",  &
+      position%x(), position%y(), position%z()
+    write (out_file_unit, "(bn)")
+    call molecule%translate(-position)
+  end subroutine translate_molecule_to_center_of_mass
 
-  close(unit=2)
+  subroutine write_moment_of_inertia_tensor()
+    integer :: i
 
-  print *, "Done!"
+    print *, "Writing moment of inertia tensor..."
+    
+    write (out_file_unit, "(a)") "Moment of inertia tensor:"
+    write (out_file_unit, "(bn)")
+    write (out_file_unit, "(3i12)") 1, 2, 3
+    write (out_file_unit, "(bn)")
+    write (out_file_unit, "(i5,3f13.7)") (i, moment_of_inertia_tensor(i, :), i = 1, 3)
+    write (out_file_unit, "(bn)")
+  end subroutine write_moment_of_inertia_tensor
+
+  subroutine write_principal_moments_of_inertia()
+    print *, "Writing principal moments of inertia..."
+
+    write (out_file_unit, "(a)") "Principal moments of inertia (amu * bohr^2):"
+    write (out_file_unit, "(a,3f13.6)") tab, principal_moments_of_inertia
+    write (out_file_unit, "(bn)")
+
+    write (out_file_unit, "(a)") "Principal moments of inertia (amu * AA^2):"
+    write (out_file_unit, "(a,3f13.6)") tab, principal_moments_of_inertia * bohr_to_angstrom ** 2
+    write (out_file_unit, "(bn)")
+
+    write (out_file_unit, "(a)") "Principal moments of inertia (g * cm^2):"
+    write (out_file_unit, "(a,3es13.6)") tab, principal_moments_of_inertia * amu_to_g * bohr_to_cm ** 2
+    write (out_file_unit, "(bn)")
+  end subroutine write_principal_moments_of_inertia
+
+  subroutine classify_rotor()
+    associate (m => principal_moments_of_inertia)
+      if (molecule%number_of_atoms() == 2) then
+        write (out_file_unit, "(a)") "Molecule is diatomic."
+      else if (m(1) < 1d-4) then
+        write (out_file_unit, "(a)") "Molecule is linear."
+      else if (abs(m(1) - m(2)) < 1d-4 .and. abs(m(2) - m(3)) < 1d-4) then
+        write (out_file_unit, "(a)") "Molecule is a spherical top."
+      else if (abs(m(1) - m(2)) < 1d-4 .and. abs(m(2) - m(3)) > 1d-4) then
+        write (out_file_unit, "(a)") "Molecule is an oblate symmetric top."
+      else if (abs(m(1) - m(2)) > 1d-4 .and. abs(m(2) - m(3)) < 1d-4) then
+        write (out_file_unit, "(a)") "Molecule is a prolate symmetric top."
+      else 
+        write (out_file_unit, "(a)") "Molecule is an asymmetric top."
+      end if
+      write (out_file_unit, "(bn)")
+    end associate
+  end subroutine
+
+  subroutine write_rotational_constants()
+    write (out_file_unit, "(a)") "Rotational constants (MHz):"
+    write (out_file_unit, "(3(a,a4,f10.3))") &
+      tab, "A = ", rotational_constants(1) * speed_of_light_in_vacuum / mega, &
+      tab, "B = ", rotational_constants(2) * speed_of_light_in_vacuum / mega, &
+      tab, "C = ", rotational_constants(3) * speed_of_light_in_vacuum / mega
+    write (out_file_unit, "(bn)")
+    write (out_file_unit, "(a)") "Rotational constants (cm-1):"
+    write (out_file_unit, "(3(a,a4,f6.4))") &
+      tab, "A = ", rotational_constants(1) * centi, &
+      tab, "B = ", rotational_constants(2) * centi, &
+      tab, "C = ", rotational_constants(3) * centi
+  end subroutine write_rotational_constants
 
 end program project_01
