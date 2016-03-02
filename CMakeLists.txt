@@ -87,3 +87,6 @@ target_link_libraries(project_01 ${LAPACK_LIBRARIES})
 
 add_executable(project_02 ../fcl/fcl_constants.f90 ../fcl/fcl_kinds.f90 ../fcl/fcl_lapack.f90 ../fcl/fcl_vecmath_vector_3d.F90 chem.f90 project_02.f90)
 target_link_libraries(project_02 ${LAPACK_LIBRARIES})
+
+add_executable(project_03 ../fcl/fcl_kinds.f90 project_03.f90)
+
