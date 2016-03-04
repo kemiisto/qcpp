@@ -1,6 +1,7 @@
 program project_03
   
   use fcl_kinds
+  use fcl_lapack
   use iso_fortran_env
   
   implicit none
@@ -13,18 +14,22 @@ program project_03
   character(len=*), parameter :: nuclear_repulsion_energy_file_name = "enuc.dat"
   character(len=*), parameter :: overlap_integrals_file_name = "s.dat"
   character(len=*), parameter :: kinetic_energy_integrals_file_name = "t.dat"
-  character(len=*), parameter :: nuclear_attraction_integrals_file_name = "v.dat" 
+  character(len=*), parameter :: nuclear_attraction_integrals_file_name = "v.dat"
+  character(len=*), parameter :: two_electron_integrals_file_name = "eri.dat"
   
   character(len=256) :: inp_folder_name
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
   real(kind=d), dimension(:, :), allocatable :: overlap_integrals, &
+    overlap_eigenvectors, &
     kinetic_energy_integrals, &
     nuclear_attraction_integrals, &
-    core_hamiltonian
-  
+    core_hamiltonian, &
+    symmetric_orthogonalization_matrix
+  real(kind=d), dimension(:), allocatable :: overlap_eigenvalues
+  real(kind=d), dimension(:), allocatable :: two_electron_integrals
   real(kind=d) :: nuclear_repulsion_energy
-  integer :: basis_set_size
+  integer :: basis_set_size, temp, i
   
   if (command_argument_count() /= 2) then
     print *, "Provide input folder and output file name."
@@ -43,9 +48,15 @@ program project_03
   call determine_basis_set_size()
     
   allocate (overlap_integrals(basis_set_size, basis_set_size))
+  allocate (overlap_eigenvectors(basis_set_size, basis_set_size))
+  allocate (symmetric_orthogonalization_matrix(basis_set_size, basis_set_size))
+  allocate (overlap_eigenvalues(basis_set_size))
   allocate (kinetic_energy_integrals(basis_set_size, basis_set_size))
   allocate (nuclear_attraction_integrals(basis_set_size, basis_set_size))
   allocate (core_hamiltonian(basis_set_size, basis_set_size))
+  temp = (basis_set_size * (basis_set_size + 1)) / 2
+  allocate (two_electron_integrals((temp * (temp + 1)) / 2))
+  two_electron_integrals = 0.0_d
 
   call read_one_electron_integrals(overlap_integrals_file_name, overlap_integrals)
   call read_one_electron_integrals(kinetic_energy_integrals_file_name, kinetic_energy_integrals)
@@ -69,13 +80,31 @@ program project_03
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Core Hamiltonian:"
   call write_square_matrix(core_hamiltonian)
+  
+  call read_two_electron_integrals(two_electron_integrals)
+  
+  overlap_eigenvectors = overlap_integrals
+  call fcl_lapack_dsyev(overlap_eigenvectors, overlap_eigenvalues, .true.)
+  overlap_eigenvalues = overlap_eigenvalues ** (-1.0_d/2)
+  overlap_integrals = 0.0_d
+  do i = 1, basis_set_size
+    overlap_integrals(i, i) = overlap_eigenvalues(i)
+  end do
+  symmetric_orthogonalization_matrix = matmul(overlap_eigenvectors, overlap_integrals)
+  symmetric_orthogonalization_matrix = matmul(symmetric_orthogonalization_matrix, transpose(overlap_eigenvectors))
+  write (out_file_unit, "(bn)")
+  write (out_file_unit, "(a)") "	S^-1/2 Matrix:"
+  call write_square_matrix(symmetric_orthogonalization_matrix)
+
   close(unit=out_file_unit)
 
   deallocate (overlap_integrals)
+  deallocate (overlap_eigenvectors)
+  deallocate (symmetric_orthogonalization_matrix)
   deallocate (kinetic_energy_integrals)
   deallocate (nuclear_attraction_integrals)
   deallocate (core_hamiltonian)
-
+  deallocate (two_electron_integrals)
 
 contains
   
@@ -113,7 +142,8 @@ contains
     real(kind=d) :: integral
     
     inp_file_name = trim(inp_folder_name)//"/"//integrals_file_name
-    print *, "Reading "//trim(inp_file_name)
+    print *, "Reading one-electron integrals..."
+    print *, "  file: "//trim(inp_file_name)
     open(unit=inp_file_unit, file=trim(inp_file_name), action="read")
     
     n = size(integrals, 1)
@@ -127,6 +157,31 @@ contains
     
     close(unit=inp_file_unit)
   end subroutine read_one_electron_integrals
+  
+  subroutine read_two_electron_integrals(two_electron_integrals)
+    real(kind=d), dimension(:), intent(out) :: two_electron_integrals
+    
+    integer :: stat, i, j, k, l, ij, kl, ijkl
+    real(kind=d) :: integral
+    
+    inp_file_name = trim(inp_folder_name)//"/"//two_electron_integrals_file_name
+    print *, "Reading two-electron integrals..."
+    print *, "  file: "//trim(inp_file_name)
+    open(unit=inp_file_unit, file=trim(inp_file_name), action="read")
+    
+
+    do
+      read (inp_file_unit,*,iostat=stat) i, j, k, l, integral
+      if (stat == iostat_end) exit
+      ij = compound_index(i, j)
+      kl = compound_index(k, l)
+      ijkl = compound_index(ij, kl)
+!       print *, i, j, k, l, ij, kl, ijkl
+      two_electron_integrals(ijkl) = integral      
+    end do
+    
+    close(unit=inp_file_unit)
+  end subroutine read_two_electron_integrals
   
   subroutine write_square_matrix(matrix)
     real(kind=d), dimension(:,:), intent(in) :: matrix
@@ -155,5 +210,16 @@ contains
       cols = cols - max_cols
     end do
   end subroutine write_square_matrix
+  
+  function compound_index(i, j) result(res)
+    integer, intent(in) :: i, j
+    integer :: res
+    
+    if (i > j) then
+      res = i * (i - 1) / 2 + j
+    else
+      res = j * (j - 1) / 2 + i
+    end if
+  end function compound_index
   
 end program project_03

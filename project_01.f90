@@ -63,7 +63,7 @@ program project_01
   call write_moment_of_inertia_tensor()
 
   print *, "Calculating principal moments of inertia..."
-  call fcl_lapack_dsyev(moment_of_inertia_tensor, principal_moments_of_inertia)
+  call fcl_lapack_dsyev(moment_of_inertia_tensor, principal_moments_of_inertia, .false.)
   call write_principal_moments_of_inertia()
   
   call classify_rotor()

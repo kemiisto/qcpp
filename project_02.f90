@@ -49,7 +49,7 @@ program project_02
   call mass_weight_hessian()
 
   print *, "Finding Hessian eigenvalues..."
-  call fcl_lapack_dsyev(hessian, hessian_eigenvalues)
+  call fcl_lapack_dsyev(hessian, hessian_eigenvalues, .false.)
 
   open(unit=out_file_unit, file=out_file_name, action="write")
   call write_hessian_eigenvalues()
