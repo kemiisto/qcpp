@@ -2,6 +2,7 @@ program project_03
   
   use fcl_kinds
   use fcl_lapack
+  use chem
   use iso_fortran_env
   
   implicit none
@@ -11,6 +12,7 @@ program project_03
   integer, parameter :: inp_file_unit = 1
   integer, parameter :: out_file_unit = 2
   
+  character(len=*), parameter :: molecule_file_name = "geom.dat"
   character(len=*), parameter :: nuclear_repulsion_energy_file_name = "enuc.dat"
   character(len=*), parameter :: overlap_integrals_file_name = "s.dat"
   character(len=*), parameter :: kinetic_energy_integrals_file_name = "t.dat"
@@ -20,6 +22,9 @@ program project_03
   character(len=256) :: inp_folder_name
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
+
+  type(chem_mod_molecule) :: molecule
+
   real(kind=d), dimension(:, :), allocatable :: overlap_integrals, &
     overlap_eigenvectors, &
     kinetic_energy_integrals, &
@@ -47,6 +52,11 @@ program project_03
   print *, "Input folder: ", trim(inp_folder_name)
   print *, " Output file: ", trim(out_file_name)
   print *, separator
+
+  inp_file_name = trim(inp_folder_name)//"/"//molecule_file_name
+  print *, "Reading molecule..."
+  print *, "  file: "//trim(inp_file_name)
+  call chem_mod_read_molecule_from_file(molecule, inp_file_name)
 
   call read_nuclear_repulsion_energy()  
   call determine_basis_set_size()
@@ -118,7 +128,7 @@ program project_03
   call write_square_matrix(coefficients_matrix)
   
   ! FIX: read geometry and calculate number of occupied MOs.
-  number_of_occupied_orbitals = 5
+  number_of_occupied_orbitals = molecule%number_of_electrons() / 2
   density_matrix = 0.0_d
   do i = 1, basis_set_size
     do j = 1, basis_set_size

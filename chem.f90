@@ -31,6 +31,7 @@ module chem
     procedure :: set_number_of_atoms          => chem_mod_molecule_set_number_of_atoms
     procedure :: atom                         => chem_mod_molecule_atom
     procedure :: atom_pointer                 => chem_mod_molecule_atom_pointer
+    procedure :: number_of_electrons          => chem_mod_molecule_number_of_electrons
     procedure :: distance                     => chem_mod_molecule_distance
     procedure :: angle                        => chem_mod_molecule_angle
     procedure :: out_of_plane_angle           => chem_mod_molecule_out_of_plane_angle
@@ -107,6 +108,20 @@ contains
 
     f => this%atoms(i)%atom
   end function chem_mod_molecule_atom_pointer
+  
+  pure function chem_mod_molecule_number_of_electrons(this) result(f)
+    class(chem_mod_molecule), intent(in) :: this
+    integer :: f
+    
+    integer :: i
+    type(chem_mod_atom) :: atom
+    
+    f = 0
+    do i = 1, this%number_of_atoms()
+      atom = this%atoms(i)%atom
+      f = f + atom%atomic_number
+    end do
+  end function chem_mod_molecule_number_of_electrons
 
   pure function chem_mod_molecule_distance(this, i, j) result(f)
     class(chem_mod_molecule), intent(in) :: this
