@@ -25,11 +25,15 @@ program project_03
     kinetic_energy_integrals, &
     nuclear_attraction_integrals, &
     core_hamiltonian, &
-    symmetric_orthogonalization_matrix
+    symmetric_orthogonalization_matrix, &
+    fock_matrix, &
+    coefficients_matrix, &
+    density_matrix
   real(kind=d), dimension(:), allocatable :: overlap_eigenvalues
+  real(kind=d), dimension(:), allocatable :: orbital_energies
   real(kind=d), dimension(:), allocatable :: two_electron_integrals
   real(kind=d) :: nuclear_repulsion_energy
-  integer :: basis_set_size, temp, i
+  integer :: basis_set_size, temp, i, j, m, number_of_occupied_orbitals
   
   if (command_argument_count() /= 2) then
     print *, "Provide input folder and output file name."
@@ -54,6 +58,10 @@ program project_03
   allocate (kinetic_energy_integrals(basis_set_size, basis_set_size))
   allocate (nuclear_attraction_integrals(basis_set_size, basis_set_size))
   allocate (core_hamiltonian(basis_set_size, basis_set_size))
+  allocate (fock_matrix(basis_set_size, basis_set_size))
+  allocate (coefficients_matrix(basis_set_size, basis_set_size))
+  allocate (orbital_energies(basis_set_size))
+  allocate (density_matrix(basis_set_size, basis_set_size))
   temp = (basis_set_size * (basis_set_size + 1)) / 2
   allocate (two_electron_integrals((temp * (temp + 1)) / 2))
   two_electron_integrals = 0.0_d
@@ -95,6 +103,33 @@ program project_03
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	S^-1/2 Matrix:"
   call write_square_matrix(symmetric_orthogonalization_matrix)
+  
+  fock_matrix = matmul(transpose(symmetric_orthogonalization_matrix), core_hamiltonian)
+  fock_matrix = matmul(fock_matrix, symmetric_orthogonalization_matrix)
+  write (out_file_unit, "(bn)")
+  write (out_file_unit, "(a)") "	Initial F' Matrix:"
+  call write_square_matrix(fock_matrix)
+  
+  coefficients_matrix = fock_matrix
+  call fcl_lapack_dsyev(coefficients_matrix, orbital_energies, .true.)
+  coefficients_matrix = matmul(symmetric_orthogonalization_matrix, coefficients_matrix)
+  write (out_file_unit, "(bn)")
+  write (out_file_unit, "(a)") "	Initial C Matrix:"
+  call write_square_matrix(coefficients_matrix)
+  
+  ! FIX: read geometry and calculate number of occupied MOs.
+  number_of_occupied_orbitals = 5
+  density_matrix = 0.0_d
+  do i = 1, basis_set_size
+    do j = 1, basis_set_size
+      do m = 1, number_of_occupied_orbitals
+        density_matrix(i, j) = density_matrix(i, j) + coefficients_matrix(i, m) * coefficients_matrix(j, m)
+      end do
+    end do
+  end do
+  write (out_file_unit, "(bn)")
+  write (out_file_unit, "(a)") "	Initial Density Matrix:"
+  call write_square_matrix(density_matrix)
 
   close(unit=out_file_unit)
 
@@ -105,6 +140,10 @@ program project_03
   deallocate (nuclear_attraction_integrals)
   deallocate (core_hamiltonian)
   deallocate (two_electron_integrals)
+  deallocate (fock_matrix)
+  deallocate (coefficients_matrix)
+  deallocate (orbital_energies)
+  deallocate (density_matrix)
 
 contains
   
@@ -168,7 +207,6 @@ contains
     print *, "Reading two-electron integrals..."
     print *, "  file: "//trim(inp_file_name)
     open(unit=inp_file_unit, file=trim(inp_file_name), action="read")
-    
 
     do
       read (inp_file_unit,*,iostat=stat) i, j, k, l, integral
