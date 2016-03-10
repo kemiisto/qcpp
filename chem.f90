@@ -7,7 +7,10 @@ module chem
 
   private
 
-  public :: chem_mod_atom, chem_mod_molecule, chem_mod_atomic_masses
+  public :: chem_mod_atom, &
+    chem_mod_molecule, &
+    chem_mod_atomic_masses, &
+    chem_mod_read_molecule_from_file
 
   type chem_mod_atom
     integer :: atomic_number
@@ -270,5 +273,30 @@ contains
       f(3, 2) = f(2, 3)
     end do
   end function chem_mod_molecule_moment_of_inertia_tensor
+  
+  subroutine chem_mod_read_molecule_from_file(molecule, inp_file_name)
+    type(chem_mod_molecule), intent(out) :: molecule
+    character(len=*), intent(in) :: inp_file_name
+
+    integer, parameter :: inp_file_unit = 1
+    integer :: i, number_of_atoms
+    real :: atomic_number
+    type(chem_mod_atom), pointer :: atom
+    type(fcl_vecmath_mod_vector3d) :: position
+    
+    open(unit=inp_file_unit, file=inp_file_name, action="read")
+    
+    read (inp_file_unit,*) number_of_atoms
+    call molecule%set_number_of_atoms(number_of_atoms)
+    
+    do i = 1, number_of_atoms
+      read (inp_file_unit,*) atomic_number, position
+      atom => molecule%atom_pointer(i)
+      atom%atomic_number = int(atomic_number)
+      atom%position = position
+    end do
+    
+    close(unit=inp_file_unit)
+  end subroutine chem_mod_read_molecule_from_file
 
 end module chem

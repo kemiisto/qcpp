@@ -18,7 +18,6 @@ program project_02
 
   type(chem_mod_molecule) :: molecule
   
-  type(fcl_vecmath_mod_vector3d) :: position
   real(kind=d), dimension(:,:), allocatable :: hessian
   real(kind=d), dimension(:), allocatable :: hessian_eigenvalues, frequencies
 
@@ -37,9 +36,7 @@ program project_02
   print *, "        Output file: ", trim(out_file_name)
   print *, separator
 
-  open(unit=inp_file_unit, file=geometry_inp_file_name, action="read")
-  call read_geometry()
-  close(unit=inp_file_unit)
+  call chem_mod_read_molecule_from_file(molecule, geometry_inp_file_name)
 
   allocate (hessian(molecule%number_of_atoms() * 3, molecule%number_of_atoms() * 3))
   allocate (hessian_eigenvalues(molecule%number_of_atoms() * 3))
@@ -70,23 +67,6 @@ program project_02
   deallocate (frequencies)
 
 contains
-
-  subroutine read_geometry()
-    integer :: number_of_atoms, i
-    real(kind=d) :: atomic_number
-    type(chem_mod_atom), pointer :: atom
-
-    print *, "Reading geometry..."
-    read (inp_file_unit,*) number_of_atoms
-    call molecule%set_number_of_atoms(number_of_atoms)
-    
-    do i = 1, number_of_atoms
-      read (inp_file_unit,*) atomic_number, position
-      atom => molecule%atom_pointer(i)
-      atom%atomic_number = int(atomic_number)
-      atom%position = position
-    end do
-  end subroutine read_geometry
 
   subroutine read_hessian()
     integer :: number_of_atoms, i, j

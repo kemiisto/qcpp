@@ -10,7 +10,6 @@ program project_01
 
   character(len=79), parameter :: separator = repeat("-", 79)
   character(len=1), parameter :: tab = char(9)
-  integer, parameter :: inp_file_unit = 1
   integer, parameter :: out_file_unit = 2
 
   real(kind=d), parameter :: m_to_angstrom = 1.0d+10
@@ -26,8 +25,6 @@ program project_01
   character(len=256) :: out_file_name
   type(chem_mod_molecule) :: molecule
   type(chem_mod_atom), pointer :: atom
-  integer :: number_of_atoms
-  integer :: atomic_number
   type(fcl_vecmath_mod_vector3d) :: position
   real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
   real(kind=d), dimension(3) :: principal_moments_of_inertia
@@ -46,9 +43,7 @@ program project_01
   print *, "Output file: ", trim(out_file_name)
   print *, separator
 
-  open(unit=inp_file_unit, file=inp_file_name, action="read")
-  call read_geometry()
-  close(unit=inp_file_unit)
+  call chem_mod_read_molecule_from_file(molecule, inp_file_name)
 
   open(unit=out_file_unit, file=out_file_name, action="write")
   call write_geometry()
@@ -79,21 +74,6 @@ program project_01
   print *, separator
 
 contains
-
-  subroutine read_geometry()
-    integer :: i
-
-    print *, "Reading input file..."
-    read (inp_file_unit,*) number_of_atoms
-    call molecule%set_number_of_atoms(number_of_atoms)
-    
-    do i = 1, number_of_atoms
-      read (inp_file_unit,*) atomic_number, position
-      atom => molecule%atom_pointer(i)
-      atom%atomic_number = atomic_number
-      atom%position = position
-    end do
-  end subroutine read_geometry
 
   subroutine write_geometry()
     integer :: i
