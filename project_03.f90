@@ -2,12 +2,16 @@ program project_03
   
   use fcl_kinds
   use fcl_lapack
+  use fcl_util
   use chem
   use iso_fortran_env
   
   implicit none
   
   character(len=79), parameter :: separator = repeat("-", 79)
+
+  integer, parameter :: max_columns = 10
+  character(len=*), parameter :: format = "f12.7"
   
   integer, parameter :: inp_file_unit = 1
   integer, parameter :: out_file_unit = 2
@@ -88,16 +92,24 @@ program project_03
   write (out_file_unit, "(a,f20.10)") "Nuclear repulsion energy = ", nuclear_repulsion_energy
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Overlap Integrals:"
-  call write_square_matrix(overlap_integrals)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, overlap_integrals, format, max_columns, &
+    headers=.true., decorate=.false.)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Kinetic-Energy Integrals:"
-  call write_square_matrix(kinetic_energy_integrals)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, kinetic_energy_integrals, format, max_columns, &
+    headers=.true., decorate=.false.)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Nuclear Attraction Integrals:"
-  call write_square_matrix(nuclear_attraction_integrals)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, nuclear_attraction_integrals, format, max_columns, &
+    headers=.true., decorate=.false.)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Core Hamiltonian:"
-  call write_square_matrix(core_hamiltonian)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, core_hamiltonian, format, max_columns, &
+    headers=.true., decorate=.false.)
   
   call read_two_electron_integrals(two_electron_integrals)
   
@@ -112,22 +124,27 @@ program project_03
   symmetric_orthogonalization_matrix = matmul(symmetric_orthogonalization_matrix, transpose(overlap_eigenvectors))
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	S^-1/2 Matrix:"
-  call write_square_matrix(symmetric_orthogonalization_matrix)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, symmetric_orthogonalization_matrix, format, max_columns, &
+    headers=.true., decorate=.false.)
   
   fock_matrix = matmul(transpose(symmetric_orthogonalization_matrix), core_hamiltonian)
   fock_matrix = matmul(fock_matrix, symmetric_orthogonalization_matrix)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial F' Matrix:"
-  call write_square_matrix(fock_matrix)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, fock_matrix, format, max_columns, &
+    headers=.true., decorate=.false.)
   
   coefficients_matrix = fock_matrix
   call fcl_lapack_dsyev(coefficients_matrix, orbital_energies, .true.)
   coefficients_matrix = matmul(symmetric_orthogonalization_matrix, coefficients_matrix)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial C Matrix:"
-  call write_square_matrix(coefficients_matrix)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, coefficients_matrix, format, max_columns, &
+    headers=.true., decorate=.false.)
   
-  ! FIX: read geometry and calculate number of occupied MOs.
   number_of_occupied_orbitals = molecule%number_of_electrons() / 2
   density_matrix = 0.0_d
   do i = 1, basis_set_size
@@ -139,7 +156,9 @@ program project_03
   end do
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial Density Matrix:"
-  call write_square_matrix(density_matrix)
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, density_matrix, format, max_columns, &
+    headers=.true., decorate=.false.)
 
   close(unit=out_file_unit)
 
@@ -230,34 +249,6 @@ contains
     
     close(unit=inp_file_unit)
   end subroutine read_two_electron_integrals
-  
-  subroutine write_square_matrix(matrix)
-    real(kind=d), dimension(:,:), intent(in) :: matrix
-    
-    integer, parameter :: max_cols = 10
-    
-    integer :: cols, rows, m, i, j
-    character(len=*), parameter :: header_format = "(10i12)"
-    character(len=*), parameter :: line_format = "(i5,10f12.7)"
-    
-    cols = size(matrix, 1)
-    rows = cols
-    
-    do j = 1, cols, max_cols
-      if (cols > max_cols) then
-        m = j + max_cols - 1
-      else
-        m = j + cols - 1
-      end if
-      write (out_file_unit, "(bn)")
-      write (out_file_unit, header_format) (i, i = j, m)
-      write (out_file_unit, "(bn)")
-      do i = 1, rows
-        write (out_file_unit, line_format) i, matrix(i, j:m)
-      end do
-      cols = cols - max_cols
-    end do
-  end subroutine write_square_matrix
   
   function compound_index(i, j) result(res)
     integer, intent(in) :: i, j
