@@ -36,13 +36,17 @@ program project_03
     core_hamiltonian, &
     symmetric_orthogonalization_matrix, &
     fock_matrix, &
+    transformed_fock_matrix, &
     coefficients_matrix, &
     density_matrix
   real(kind=d), dimension(:), allocatable :: overlap_eigenvalues
   real(kind=d), dimension(:), allocatable :: orbital_energies
   real(kind=d), dimension(:), allocatable :: two_electron_integrals
   real(kind=d) :: nuclear_repulsion_energy
-  integer :: basis_set_size, temp, i, j, m, number_of_occupied_orbitals
+  integer :: basis_set_size, temp, number_of_occupied_orbitals, iteration
+  integer :: i, j, k, l, m
+  integer :: ij, kl, ijkl, ik, jl, ikjl
+  real(kind=d) :: electronic_energy, previous_electronic_energy
   
   if (command_argument_count() /= 2) then
     print *, "Provide input folder and output file name."
@@ -73,6 +77,7 @@ program project_03
   allocate (nuclear_attraction_integrals(basis_set_size, basis_set_size))
   allocate (core_hamiltonian(basis_set_size, basis_set_size))
   allocate (fock_matrix(basis_set_size, basis_set_size))
+  allocate (transformed_fock_matrix(basis_set_size, basis_set_size))
   allocate (coefficients_matrix(basis_set_size, basis_set_size))
   allocate (orbital_energies(basis_set_size))
   allocate (density_matrix(basis_set_size, basis_set_size))
@@ -128,15 +133,16 @@ program project_03
   call fcl_util_pretty_print(out_file_unit, symmetric_orthogonalization_matrix, format, max_columns, &
     headers=.true., decorate=.false.)
   
-  fock_matrix = matmul(transpose(symmetric_orthogonalization_matrix), core_hamiltonian)
-  fock_matrix = matmul(fock_matrix, symmetric_orthogonalization_matrix)
+  fock_matrix = core_hamiltonian
+  transformed_fock_matrix = matmul(transpose(symmetric_orthogonalization_matrix), fock_matrix)
+  transformed_fock_matrix = matmul(transformed_fock_matrix, symmetric_orthogonalization_matrix)
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial F' Matrix:"
   write (out_file_unit, "(bn)")
-  call fcl_util_pretty_print(out_file_unit, fock_matrix, format, max_columns, &
+  call fcl_util_pretty_print(out_file_unit, transformed_fock_matrix, format, max_columns, &
     headers=.true., decorate=.false.)
   
-  coefficients_matrix = fock_matrix
+  coefficients_matrix = transformed_fock_matrix
   call fcl_lapack_dsyev(coefficients_matrix, orbital_energies, .true.)
   coefficients_matrix = matmul(symmetric_orthogonalization_matrix, coefficients_matrix)
   write (out_file_unit, "(bn)")
@@ -159,6 +165,44 @@ program project_03
   write (out_file_unit, "(bn)")
   call fcl_util_pretty_print(out_file_unit, density_matrix, format, max_columns, &
     headers=.true., decorate=.false.)
+  write (out_file_unit, "(bn)")
+  write (out_file_unit, "(bn)")
+
+  write (out_file_unit, "(a5,a15,a20,a20,a20)") "Iter", "E(elec)", "E(tot)", "Delta(E)", "RMS(D)"
+  iteration = 0
+  previous_electronic_energy = 0.0_d
+  electronic_energy = 0.0_d
+  do i = 1, basis_set_size
+    do j = 1, basis_set_size
+      electronic_energy = electronic_energy + density_matrix(i, j) * &
+        (core_hamiltonian(i, j) + fock_matrix(i, j))
+    end do
+  end do
+  write (out_file_unit, "(i3.2,2f21.12)") iteration, electronic_energy, &
+    electronic_energy + nuclear_repulsion_energy
+  write (out_file_unit, "(bn)")
+
+  do i = 1, basis_set_size
+    do j = 1, basis_set_size
+      fock_matrix(i, j) = core_hamiltonian(i, j)
+      do k = 1, basis_set_size
+        do l = 1, basis_set_size
+          ij = compound_index(i, j)
+          kl = compound_index(k, l)
+          ijkl = compound_index(ij, kl)
+          ik = compound_index(i, k)
+          jl = compound_index(j, l)
+          ikjl = compound_index(ik, jl)
+          fock_matrix(i, j) = fock_matrix(i, j) + density_matrix(k, l) * &
+            (2 * two_electron_integrals(ijkl) - two_electron_integrals(ikjl))
+        end do
+      end do
+    end do
+  end do
+  write (out_file_unit, "(a)") "  Fock Matrix:"
+  write (out_file_unit, "(bn)")
+  call fcl_util_pretty_print(out_file_unit, fock_matrix, format, max_columns, &
+    headers=.true., decorate=.false.)
 
   close(unit=out_file_unit)
 
@@ -170,6 +214,7 @@ program project_03
   deallocate (core_hamiltonian)
   deallocate (two_electron_integrals)
   deallocate (fock_matrix)
+  deallocate (transformed_fock_matrix)
   deallocate (coefficients_matrix)
   deallocate (orbital_energies)
   deallocate (density_matrix)
