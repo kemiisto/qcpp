@@ -15,6 +15,9 @@ program project_03
   
   integer, parameter :: inp_file_unit = 1
   integer, parameter :: out_file_unit = 2
+
+  real(kind=d), parameter :: delta_1 = 1d-12;
+  real(kind=d), parameter :: delta_2 = 1d-10;
   
   character(len=*), parameter :: molecule_file_name = "geom.dat"
   character(len=*), parameter :: nuclear_repulsion_energy_file_name = "enuc.dat"
@@ -34,19 +37,20 @@ program project_03
     kinetic_energy_integrals, &
     nuclear_attraction_integrals, &
     core_hamiltonian, &
-    symmetric_orthogonalization_matrix, &
+    orthogonalization_matrix, &
     fock_matrix, &
-    transformed_fock_matrix, &
+    orthogonalized_fock_matrix, &
     coefficients_matrix, &
-    density_matrix
+    density_matrix, &
+    previous_density_matrix
   real(kind=d), dimension(:), allocatable :: overlap_eigenvalues
   real(kind=d), dimension(:), allocatable :: orbital_energies
   real(kind=d), dimension(:), allocatable :: two_electron_integrals
   real(kind=d) :: nuclear_repulsion_energy
-  integer :: basis_set_size, temp, number_of_occupied_orbitals, iteration
+  integer :: basis_set_size, number_of_occupied_orbitals, iteration
   integer :: i, j, k, l, m
   integer :: ij, kl, ijkl, ik, jl, ikjl
-  real(kind=d) :: electronic_energy, previous_electronic_energy
+  real(kind=d) :: electronic_energy, previous_electronic_energy, delta_electronic_energy, rms_density
   
   if (command_argument_count() /= 2) then
     print *, "Provide input folder and output file name."
@@ -66,24 +70,9 @@ program project_03
   print *, "  file: "//trim(inp_file_name)
   call chem_mod_read_molecule_from_file(molecule, inp_file_name)
 
-  call read_nuclear_repulsion_energy()  
+  call read_nuclear_repulsion_energy() 
   call determine_basis_set_size()
-    
-  allocate (overlap_integrals(basis_set_size, basis_set_size))
-  allocate (overlap_eigenvectors(basis_set_size, basis_set_size))
-  allocate (symmetric_orthogonalization_matrix(basis_set_size, basis_set_size))
-  allocate (overlap_eigenvalues(basis_set_size))
-  allocate (kinetic_energy_integrals(basis_set_size, basis_set_size))
-  allocate (nuclear_attraction_integrals(basis_set_size, basis_set_size))
-  allocate (core_hamiltonian(basis_set_size, basis_set_size))
-  allocate (fock_matrix(basis_set_size, basis_set_size))
-  allocate (transformed_fock_matrix(basis_set_size, basis_set_size))
-  allocate (coefficients_matrix(basis_set_size, basis_set_size))
-  allocate (orbital_energies(basis_set_size))
-  allocate (density_matrix(basis_set_size, basis_set_size))
-  temp = (basis_set_size * (basis_set_size + 1)) / 2
-  allocate (two_electron_integrals((temp * (temp + 1)) / 2))
-  two_electron_integrals = 0.0_d
+  call allocate_arrays()
 
   call read_one_electron_integrals(overlap_integrals_file_name, overlap_integrals)
   call read_one_electron_integrals(kinetic_energy_integrals_file_name, kinetic_energy_integrals)
@@ -125,26 +114,24 @@ program project_03
   do i = 1, basis_set_size
     overlap_integrals(i, i) = overlap_eigenvalues(i)
   end do
-  symmetric_orthogonalization_matrix = matmul(overlap_eigenvectors, overlap_integrals)
-  symmetric_orthogonalization_matrix = matmul(symmetric_orthogonalization_matrix, transpose(overlap_eigenvectors))
+  orthogonalization_matrix = matmul(overlap_eigenvectors, overlap_integrals)
+  orthogonalization_matrix = matmul(orthogonalization_matrix, transpose(overlap_eigenvectors))
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	S^-1/2 Matrix:"
   write (out_file_unit, "(bn)")
-  call fcl_util_pretty_print(out_file_unit, symmetric_orthogonalization_matrix, format, max_columns, &
+  call fcl_util_pretty_print(out_file_unit, orthogonalization_matrix, format, max_columns, &
     headers=.true., decorate=.false.)
   
   fock_matrix = core_hamiltonian
-  transformed_fock_matrix = matmul(transpose(symmetric_orthogonalization_matrix), fock_matrix)
-  transformed_fock_matrix = matmul(transformed_fock_matrix, symmetric_orthogonalization_matrix)
+  call build_orthogonalized_fock_matrix()
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial F' Matrix:"
   write (out_file_unit, "(bn)")
-  call fcl_util_pretty_print(out_file_unit, transformed_fock_matrix, format, max_columns, &
+  call fcl_util_pretty_print(out_file_unit, orthogonalized_fock_matrix, format, max_columns, &
     headers=.true., decorate=.false.)
   
-  coefficients_matrix = transformed_fock_matrix
-  call fcl_lapack_dsyev(coefficients_matrix, orbital_energies, .true.)
-  coefficients_matrix = matmul(symmetric_orthogonalization_matrix, coefficients_matrix)
+  call diagonalize_orthogonalized_fock_matrix()
+  call build_coefficients_matrix()
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial C Matrix:"
   write (out_file_unit, "(bn)")
@@ -152,14 +139,7 @@ program project_03
     headers=.true., decorate=.false.)
   
   number_of_occupied_orbitals = molecule%number_of_electrons() / 2
-  density_matrix = 0.0_d
-  do i = 1, basis_set_size
-    do j = 1, basis_set_size
-      do m = 1, number_of_occupied_orbitals
-        density_matrix(i, j) = density_matrix(i, j) + coefficients_matrix(i, m) * coefficients_matrix(j, m)
-      end do
-    end do
-  end do
+  call build_density_matrix()
   write (out_file_unit, "(bn)")
   write (out_file_unit, "(a)") "	Initial Density Matrix:"
   write (out_file_unit, "(bn)")
@@ -171,55 +151,83 @@ program project_03
   write (out_file_unit, "(a5,a15,a20,a20,a20)") "Iter", "E(elec)", "E(tot)", "Delta(E)", "RMS(D)"
   iteration = 0
   previous_electronic_energy = 0.0_d
-  electronic_energy = 0.0_d
-  do i = 1, basis_set_size
-    do j = 1, basis_set_size
-      electronic_energy = electronic_energy + density_matrix(i, j) * &
-        (core_hamiltonian(i, j) + fock_matrix(i, j))
-    end do
-  end do
+  call calculate_electronic_energy()
   write (out_file_unit, "(i3.2,2f21.12)") iteration, electronic_energy, &
     electronic_energy + nuclear_repulsion_energy
   write (out_file_unit, "(bn)")
 
-  do i = 1, basis_set_size
-    do j = 1, basis_set_size
-      fock_matrix(i, j) = core_hamiltonian(i, j)
-      do k = 1, basis_set_size
-        do l = 1, basis_set_size
-          ij = compound_index(i, j)
-          kl = compound_index(k, l)
-          ijkl = compound_index(ij, kl)
-          ik = compound_index(i, k)
-          jl = compound_index(j, l)
-          ikjl = compound_index(ik, jl)
-          fock_matrix(i, j) = fock_matrix(i, j) + density_matrix(k, l) * &
-            (2 * two_electron_integrals(ijkl) - two_electron_integrals(ikjl))
-        end do
+  do
+    iteration = iteration + 1
+    call build_fock_matrix()
+
+    if (iteration == 1) then
+      write (out_file_unit, "(a)") "  Fock Matrix:"
+      write (out_file_unit, "(bn)")
+      call fcl_util_pretty_print(out_file_unit, fock_matrix, format, max_columns, &
+        headers=.true., decorate=.false.)
+    endif
+    
+    call build_orthogonalized_fock_matrix()
+    call diagonalize_orthogonalized_fock_matrix()
+    call build_coefficients_matrix()
+    previous_density_matrix = density_matrix
+    call build_density_matrix()
+    previous_electronic_energy = electronic_energy
+    call calculate_electronic_energy()
+
+    delta_electronic_energy = electronic_energy - previous_electronic_energy
+    rms_density = 0.0_d
+    do i = 1, basis_set_size
+      do j = 1, basis_set_size
+        rms_density = rms_density + (density_matrix(i,j) - previous_density_matrix(i,j)) ** 2
       end do
     end do
-  end do
-  write (out_file_unit, "(a)") "  Fock Matrix:"
-  write (out_file_unit, "(bn)")
-  call fcl_util_pretty_print(out_file_unit, fock_matrix, format, max_columns, &
-    headers=.true., decorate=.false.)
+    rms_density = sqrt(rms_density)
+    write (out_file_unit, "(i3.2,4f21.12)") iteration, electronic_energy, &
+      electronic_energy + nuclear_repulsion_energy, delta_electronic_energy, rms_density
 
+    if (delta_electronic_energy < delta_1 .and. rms_density < delta_2) exit 
+  end do
+
+  call deallocate_arrays()
   close(unit=out_file_unit)
 
-  deallocate (overlap_integrals)
-  deallocate (overlap_eigenvectors)
-  deallocate (symmetric_orthogonalization_matrix)
-  deallocate (kinetic_energy_integrals)
-  deallocate (nuclear_attraction_integrals)
-  deallocate (core_hamiltonian)
-  deallocate (two_electron_integrals)
-  deallocate (fock_matrix)
-  deallocate (transformed_fock_matrix)
-  deallocate (coefficients_matrix)
-  deallocate (orbital_energies)
-  deallocate (density_matrix)
-
 contains
+
+  subroutine allocate_arrays()
+    integer :: n
+    allocate (overlap_integrals(basis_set_size, basis_set_size))
+    allocate (overlap_eigenvectors(basis_set_size, basis_set_size))
+    allocate (orthogonalization_matrix(basis_set_size, basis_set_size))
+    allocate (overlap_eigenvalues(basis_set_size))
+    allocate (kinetic_energy_integrals(basis_set_size, basis_set_size))
+    allocate (nuclear_attraction_integrals(basis_set_size, basis_set_size))
+    allocate (core_hamiltonian(basis_set_size, basis_set_size))
+    allocate (fock_matrix(basis_set_size, basis_set_size))
+    allocate (orthogonalized_fock_matrix(basis_set_size, basis_set_size))
+    allocate (coefficients_matrix(basis_set_size, basis_set_size))
+    allocate (orbital_energies(basis_set_size))
+    allocate (density_matrix(basis_set_size, basis_set_size))
+    allocate (previous_density_matrix(basis_set_size, basis_set_size))
+    n = (basis_set_size * (basis_set_size + 1)) / 2
+    allocate (two_electron_integrals((n * (n + 1)) / 2))
+  end subroutine allocate_arrays
+
+  subroutine deallocate_arrays()
+    deallocate (overlap_integrals)
+    deallocate (overlap_eigenvectors)
+    deallocate (orthogonalization_matrix)
+    deallocate (kinetic_energy_integrals)
+    deallocate (nuclear_attraction_integrals)
+    deallocate (core_hamiltonian)
+    deallocate (fock_matrix)
+    deallocate (orthogonalized_fock_matrix)
+    deallocate (coefficients_matrix)
+    deallocate (orbital_energies)
+    deallocate (density_matrix)
+    deallocate (previous_density_matrix)
+    deallocate (two_electron_integrals)
+  end subroutine deallocate_arrays
   
   subroutine read_nuclear_repulsion_energy()
     inp_file_name = trim(inp_folder_name)//"/"//nuclear_repulsion_energy_file_name
@@ -282,13 +290,14 @@ contains
     print *, "  file: "//trim(inp_file_name)
     open(unit=inp_file_unit, file=trim(inp_file_name), action="read")
 
+    two_electron_integrals = 0.0_d
+
     do
       read (inp_file_unit,*,iostat=stat) i, j, k, l, integral
       if (stat == iostat_end) exit
       ij = compound_index(i, j)
       kl = compound_index(k, l)
       ijkl = compound_index(ij, kl)
-!       print *, i, j, k, l, ij, kl, ijkl
       two_electron_integrals(ijkl) = integral      
     end do
     
@@ -305,5 +314,59 @@ contains
       res = j * (j - 1) / 2 + i
     end if
   end function compound_index
-  
+
+  subroutine build_fock_matrix()
+    do i = 1, basis_set_size
+      do j = 1, basis_set_size
+        fock_matrix(i, j) = core_hamiltonian(i, j)
+        do k = 1, basis_set_size
+          do l = 1, basis_set_size
+            ij = compound_index(i, j)
+            kl = compound_index(k, l)
+            ijkl = compound_index(ij, kl)
+            ik = compound_index(i, k)
+            jl = compound_index(j, l)
+            ikjl = compound_index(ik, jl)
+            fock_matrix(i, j) = fock_matrix(i, j) + density_matrix(k, l) * &
+              (2 * two_electron_integrals(ijkl) - two_electron_integrals(ikjl))
+          end do
+        end do
+      end do
+    end do      
+  end subroutine build_fock_matrix
+
+  subroutine build_orthogonalized_fock_matrix()
+    orthogonalized_fock_matrix = matmul(transpose(orthogonalization_matrix), fock_matrix)
+    orthogonalized_fock_matrix = matmul(orthogonalized_fock_matrix, orthogonalization_matrix)
+  end subroutine build_orthogonalized_fock_matrix
+
+  subroutine diagonalize_orthogonalized_fock_matrix()
+    call fcl_lapack_dsyev(orthogonalized_fock_matrix, orbital_energies, .true.)
+  end subroutine diagonalize_orthogonalized_fock_matrix
+
+  subroutine build_coefficients_matrix
+    coefficients_matrix = matmul(orthogonalization_matrix, orthogonalized_fock_matrix)
+  end subroutine build_coefficients_matrix
+
+  subroutine build_density_matrix()
+    density_matrix = 0.0_d
+    do i = 1, basis_set_size
+      do j = 1, basis_set_size
+        do m = 1, number_of_occupied_orbitals
+          density_matrix(i, j) = density_matrix(i, j) + coefficients_matrix(i, m) * coefficients_matrix(j, m)
+        end do
+      end do
+    end do
+  end subroutine build_density_matrix
+
+  subroutine calculate_electronic_energy()
+    electronic_energy = 0.0_d
+    do i = 1, basis_set_size
+      do j = 1, basis_set_size
+        electronic_energy = electronic_energy + density_matrix(i, j) * &
+          (core_hamiltonian(i, j) + fock_matrix(i, j))
+      end do
+    end do
+  end subroutine calculate_electronic_energy
+
 end program project_03
