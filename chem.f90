@@ -42,26 +42,26 @@ module chem
   end type chem_mod_molecule
 
   ! Atomic masses of the most abundant isotopes of the first 18 elements.
-  real(kind=d), dimension(18), parameter :: chem_mod_atomic_masses = &
+  real(kind=dp), dimension(18), parameter :: chem_mod_atomic_masses = &
   [                    &
-     1.00782503223_d,  &
-     4.00260325413_d,  &
-     7.01600343660_d,  &
-     9.01218306500_d,  &
-    11.00930536000_d,  &
-    12.00000000000_d,  &
-    14.00307400443_d,  &
-    15.99491461957_d,  &
-    18.99840316273_d,  &
-    19.99244017620_d,  &
-    22.98976928200_d,  &
-    23.98504169700_d,  &
-    26.98153853000_d,  &
-    27.97692653465_d,  &
-    30.97376199842_d,  &
-    31.97207117440_d,  &
-    34.96885268200_d,  &
-    39.96238312370_d   &
+     1.00782503223_dp,  &
+     4.00260325413_dp,  &
+     7.01600343660_dp,  &
+     9.01218306500_dp,  &
+    11.00930536000_dp,  &
+    12.00000000000_dp,  &
+    14.00307400443_dp,  &
+    15.99491461957_dp,  &
+    18.99840316273_dp,  &
+    19.99244017620_dp,  &
+    22.98976928200_dp,  &
+    23.98504169700_dp,  &
+    26.98153853000_dp,  &
+    27.97692653465_dp,  &
+    30.97376199842_dp,  &
+    31.97207117440_dp,  &
+    34.96885268200_dp,  &
+    39.96238312370_dp   &
   ]   
 
 contains
@@ -126,7 +126,7 @@ contains
   pure function chem_mod_molecule_distance(this, i, j) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j
-    real(kind=d) :: f
+    real(kind=dp) :: f
 
     type(fcl_vecmath_mod_vector3d) :: v_i, v_j
 
@@ -143,7 +143,7 @@ contains
   pure function chem_mod_molecule_angle(this, i, j, k) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k
-    real(kind=d) :: f
+    real(kind=dp) :: f
 
     type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_ji, v_jk
 
@@ -165,10 +165,10 @@ contains
   pure function chem_mod_molecule_out_of_plane_angle(this, i, j, k, l) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k, l
-    real(kind=d) :: f
+    real(kind=dp) :: f
 
     type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_l, e_kj, e_kl, e_ki
-    real(kind=d) :: sin_theta
+    real(kind=dp) :: sin_theta
 
     v_i = this%atoms(i)%atom%position
     v_j = this%atoms(j)%atom%position
@@ -188,10 +188,10 @@ contains
     ! earlier in the calculation can yield results slightly outside this domain,
     ! in which case asin will return NaN.
     ! This is obviously undesirable so we test the argument before calling asin.
-    if (sin_theta < -1.0_d) then
-      sin_theta = -1.0_d
-    else if (sin_theta > 1.0_d) then
-      sin_theta = 1.0_d
+    if (sin_theta < -1.0_dp) then
+      sin_theta = -1.0_dp
+    else if (sin_theta > 1.0_dp) then
+      sin_theta = 1.0_dp
     end if
 
     f = asin(sin_theta)
@@ -202,7 +202,7 @@ contains
   pure function chem_mod_molecule_dihedral_angle(this, i, j, k, l) result(f)
     class(chem_mod_molecule), intent(in) :: this
     integer, intent(in) :: i, j, k, l
-    real(kind=d) :: f
+    real(kind=dp) :: f
 
     type(fcl_vecmath_mod_vector3d) :: v_i, v_j, v_k, v_l, &
       v_ij, v_jk, v_kl, n_ijk, n_jkl, &
@@ -224,7 +224,7 @@ contains
 
     ! sign
     cross = n_ijk .cross. n_jkl
-    if ((cross .dot. v_ij) > 0.0_d) f = -f
+    if ((cross .dot. v_ij) > 0.0_dp) f = -f
 
   end function chem_mod_molecule_dihedral_angle
 
@@ -234,12 +234,12 @@ contains
 
     integer :: i
     type(chem_mod_atom) :: atom
-    real(kind=d) :: total_m, total_mx, total_my, total_mz, m
+    real(kind=dp) :: total_m, total_mx, total_my, total_mz, m
 
-    total_m  = 0.0_d
-    total_mx = 0.0_d
-    total_my = 0.0_d
-    total_mz = 0.0_d
+    total_m  = 0.0_dp
+    total_mx = 0.0_dp
+    total_my = 0.0_dp
+    total_mz = 0.0_dp
     do i = 1, this%number_of_atoms()
       atom = this%atom(i)
       m = chem_mod_atomic_masses(atom%atomic_number)
@@ -267,13 +267,13 @@ contains
 
   pure function chem_mod_molecule_moment_of_inertia_tensor(this) result(f)
     class(chem_mod_molecule), intent(in) :: this
-    real(kind=d), dimension(3, 3) :: f
+    real(kind=dp), dimension(3, 3) :: f
 
     integer :: i
     type(chem_mod_atom) :: atom
-    real(kind=d) :: m
+    real(kind=dp) :: m
 
-    f = 0.0_d
+    f = 0.0_dp
     do i = 1, this%number_of_atoms()
       atom = this%atom(i)
       m = chem_mod_atomic_masses(atom%atomic_number)

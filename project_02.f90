@@ -18,8 +18,8 @@ program project_02
 
   type(chem_mod_molecule) :: molecule
   
-  real(kind=d), dimension(:,:), allocatable :: hessian
-  real(kind=d), dimension(:), allocatable :: hessian_eigenvalues, frequencies
+  real(kind=dp), dimension(:,:), allocatable :: hessian
+  real(kind=dp), dimension(:), allocatable :: hessian_eigenvalues, frequencies
 
   if (command_argument_count() /= 3) then
     print *, "Provide geometry input, Hessian input and output file names."
@@ -91,7 +91,7 @@ contains
 
   subroutine mass_weight_hessian()
     type(chem_mod_atom), pointer :: atom_i, atom_j
-    real(kind=d) :: mass_i, mass_j
+    real(kind=dp) :: mass_i, mass_j
 
     integer :: i, j, k, l
 

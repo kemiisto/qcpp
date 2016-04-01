@@ -16,8 +16,8 @@ program project_03
   integer, parameter :: inp_file_unit = 1
   integer, parameter :: out_file_unit = 2
 
-  real(kind=d), parameter :: delta_1 = 1d-12;
-  real(kind=d), parameter :: delta_2 = 1d-10;
+  real(kind=dp), parameter :: delta_1 = 1d-12;
+  real(kind=dp), parameter :: delta_2 = 1d-10;
   
   character(len=*), parameter :: molecule_file_name = "geom.dat"
   character(len=*), parameter :: nuclear_repulsion_energy_file_name = "enuc.dat"
@@ -32,7 +32,7 @@ program project_03
 
   type(chem_mod_molecule) :: molecule
 
-  real(kind=d), dimension(:, :), allocatable :: overlap_integrals, &
+  real(kind=dp), dimension(:, :), allocatable :: overlap_integrals, &
     overlap_eigenvectors, &
     kinetic_energy_integrals, &
     nuclear_attraction_integrals, &
@@ -43,14 +43,14 @@ program project_03
     coefficients_matrix, &
     density_matrix, &
     previous_density_matrix
-  real(kind=d), dimension(:), allocatable :: overlap_eigenvalues
-  real(kind=d), dimension(:), allocatable :: orbital_energies
-  real(kind=d), dimension(:), allocatable :: two_electron_integrals
-  real(kind=d) :: nuclear_repulsion_energy
+  real(kind=dp), dimension(:), allocatable :: overlap_eigenvalues
+  real(kind=dp), dimension(:), allocatable :: orbital_energies
+  real(kind=dp), dimension(:), allocatable :: two_electron_integrals
+  real(kind=dp) :: nuclear_repulsion_energy
   integer :: basis_set_size, number_of_occupied_orbitals, iteration
   integer :: i, j, k, l, m
   integer :: ij, kl, ijkl, ik, jl, ikjl
-  real(kind=d) :: electronic_energy, previous_electronic_energy, delta_electronic_energy, rms_density
+  real(kind=dp) :: electronic_energy, previous_electronic_energy, delta_electronic_energy, rms_density
   
   if (command_argument_count() /= 2) then
     print *, "Provide input folder and output file name."
@@ -109,8 +109,8 @@ program project_03
   
   overlap_eigenvectors = overlap_integrals
   call fcl_lapack_dsyev(overlap_eigenvectors, overlap_eigenvalues, .true.)
-  overlap_eigenvalues = overlap_eigenvalues ** (-1.0_d/2)
-  overlap_integrals = 0.0_d
+  overlap_eigenvalues = overlap_eigenvalues ** (-1.0_dp / 2)
+  overlap_integrals = 0.0_dp
   do i = 1, basis_set_size
     overlap_integrals(i, i) = overlap_eigenvalues(i)
   end do
@@ -150,7 +150,7 @@ program project_03
 
   write (out_file_unit, "(a5,a15,a20,a20,a20)") "Iter", "E(elec)", "E(tot)", "Delta(E)", "RMS(D)"
   iteration = 0
-  previous_electronic_energy = 0.0_d
+  previous_electronic_energy = 0.0_dp
   call calculate_electronic_energy()
   write (out_file_unit, "(i3.2,2f21.12)") iteration, electronic_energy, &
     electronic_energy + nuclear_repulsion_energy
@@ -176,7 +176,7 @@ program project_03
     call calculate_electronic_energy()
 
     delta_electronic_energy = electronic_energy - previous_electronic_energy
-    rms_density = 0.0_d
+    rms_density = 0.0_dp
     do i = 1, basis_set_size
       do j = 1, basis_set_size
         rms_density = rms_density + (density_matrix(i,j) - previous_density_matrix(i,j)) ** 2
@@ -257,10 +257,10 @@ contains
   
   subroutine read_one_electron_integrals(integrals_file_name, integrals)
     character(len=*), intent(in) :: integrals_file_name
-    real(kind=d), dimension(:,:), intent(out) :: integrals
+    real(kind=dp), dimension(:,:), intent(out) :: integrals
     
     integer :: n, line, i, j
-    real(kind=d) :: integral
+    real(kind=dp) :: integral
     
     inp_file_name = trim(inp_folder_name)//"/"//integrals_file_name
     print *, "Reading one-electron integrals..."
@@ -280,17 +280,17 @@ contains
   end subroutine read_one_electron_integrals
   
   subroutine read_two_electron_integrals(two_electron_integrals)
-    real(kind=d), dimension(:), intent(out) :: two_electron_integrals
+    real(kind=dp), dimension(:), intent(out) :: two_electron_integrals
     
     integer :: stat, i, j, k, l, ij, kl, ijkl
-    real(kind=d) :: integral
+    real(kind=dp) :: integral
     
     inp_file_name = trim(inp_folder_name)//"/"//two_electron_integrals_file_name
     print *, "Reading two-electron integrals..."
     print *, "  file: "//trim(inp_file_name)
     open(unit=inp_file_unit, file=trim(inp_file_name), action="read")
 
-    two_electron_integrals = 0.0_d
+    two_electron_integrals = 0.0_dp
 
     do
       read (inp_file_unit,*,iostat=stat) i, j, k, l, integral
@@ -349,7 +349,7 @@ contains
   end subroutine build_coefficients_matrix
 
   subroutine build_density_matrix()
-    density_matrix = 0.0_d
+    density_matrix = 0.0_dp
     do i = 1, basis_set_size
       do j = 1, basis_set_size
         do m = 1, number_of_occupied_orbitals
@@ -360,7 +360,7 @@ contains
   end subroutine build_density_matrix
 
   subroutine calculate_electronic_energy()
-    electronic_energy = 0.0_d
+    electronic_energy = 0.0_dp
     do i = 1, basis_set_size
       do j = 1, basis_set_size
         electronic_energy = electronic_energy + density_matrix(i, j) * &

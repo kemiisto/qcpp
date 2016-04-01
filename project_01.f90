@@ -12,23 +12,23 @@ program project_01
   character(len=1), parameter :: tab = char(9)
   integer, parameter :: out_file_unit = 2
 
-  real(kind=d), parameter :: m_to_angstrom = 1.0d+10
+  real(kind=dp), parameter :: m_to_angstrom = 1.0d+10
 
-  real(kind=d), parameter :: bohr_to_m = bohr_radius
-  real(kind=d), parameter :: bohr_to_cm = bohr_to_m / centi 
-  real(kind=d), parameter :: bohr_to_angstrom = bohr_to_m * m_to_angstrom
+  real(kind=dp), parameter :: bohr_to_m = bohr_radius
+  real(kind=dp), parameter :: bohr_to_cm = bohr_to_m / centi 
+  real(kind=dp), parameter :: bohr_to_angstrom = bohr_to_m * m_to_angstrom
 
-  real(kind=d), parameter :: amu_to_kg = unified_atomic_mass_unit
-  real(kind=d), parameter :: amu_to_g = amu_to_kg * kilo
+  real(kind=dp), parameter :: amu_to_kg = unified_atomic_mass_unit
+  real(kind=dp), parameter :: amu_to_g = amu_to_kg * kilo
   
   character(len=256) :: inp_file_name
   character(len=256) :: out_file_name
   type(chem_mod_molecule) :: molecule
   type(chem_mod_atom), pointer :: atom
   type(fcl_vecmath_mod_vector3d) :: position
-  real(kind=d), dimension(3, 3) :: moment_of_inertia_tensor
-  real(kind=d), dimension(3) :: principal_moments_of_inertia
-  real(kind=d), dimension(3) :: rotational_constants
+  real(kind=dp), dimension(3, 3) :: moment_of_inertia_tensor
+  real(kind=dp), dimension(3) :: principal_moments_of_inertia
+  real(kind=dp), dimension(3) :: rotational_constants
 
   if (command_argument_count() /= 2) then
     print *, "Provide input and output file names."
@@ -115,9 +115,9 @@ contains
     do i = 1, molecule%number_of_atoms()
       do j = i + 1, molecule%number_of_atoms()
         do k = j + 1, molecule%number_of_atoms()
-          if (molecule%distance(i, j) < 4.0_d .and. molecule%distance(j, k) < 4.0_d) then
+          if (molecule%distance(i, j) < 4.0_dp .and. molecule%distance(j, k) < 4.0_dp) then
             write (out_file_unit, "(i2,a,i2,a,i2,f11.6)") i - 1, "-", j - 1, "-", k - 1, &
-              molecule%angle(i, j, k) * (180.0_d / acos(-1.0_d))
+              molecule%angle(i, j, k) * (180.0_dp / acos(-1.0_dp))
           end if
         end do
       end do
@@ -141,13 +141,13 @@ contains
             ! j /= k .and. j /= l .and.
             ! k /= l
             ! besides j /= l is already guaranteed by the loop do l = 1, j - 1
-            if (i /= j .and. i /= k .and. i /= l .and. j /= k .and. k /= l  &
-              .and. molecule%distance(i, k) < 4.0_d                         &
-                .and. molecule%distance(j, k) < 4.0_d                       &
-                  .and. molecule%distance(l, k) < 4.0_d) then
-                    write (out_file_unit, "(i2,a,i2,a,i2,a,i2,f11.6)")      &
+            if (i /= j .and. i /= k .and. i /= l .and. j /= k .and. k /= l   &
+              .and. molecule%distance(i, k) < 4.0_dp                         &
+                .and. molecule%distance(j, k) < 4.0_dp                       &
+                  .and. molecule%distance(l, k) < 4.0_dp) then
+                    write (out_file_unit, "(i2,a,i2,a,i2,a,i2,f11.6)")       &
                       i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
-                      molecule%out_of_plane_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
+                      molecule%out_of_plane_angle(i, j, k, l) * (180.0_dp / acos(-1.0_dp))
             end if
           end do 
         end do 
@@ -166,12 +166,12 @@ contains
       do j = 1, i - 1
         do k = 1, j - 1
           do l = 1, k - 1
-            if (molecule%distance(i, j) < 4.0_d &
-                  .and. molecule%distance(j, k) < 4.0_d &
-                    .and. molecule%distance(k, l) < 4.0_d) then
+            if (molecule%distance(i, j) < 4.0_dp &
+                  .and. molecule%distance(j, k) < 4.0_dp &
+                    .and. molecule%distance(k, l) < 4.0_dp) then
               write (out_file_unit, "(i2,a,i2,a,i2,a,i2,f11.6)")  &
                 i - 1, "-", j - 1, "-", k - 1, "-", l - 1, &
-              molecule%dihedral_angle(i, j, k, l) * (180.0_d / acos(-1.0_d))
+              molecule%dihedral_angle(i, j, k, l) * (180.0_dp / acos(-1.0_dp))
             end if
           end do
         end do
