@@ -30,48 +30,29 @@ program project_01
   real(kind=dp), dimension(3) :: principal_moments_of_inertia
   real(kind=dp), dimension(3) :: rotational_constants
 
-  if (command_argument_count() /= 2) then
-    print *, "Provide input and output file names."
-    stop
-  end if
-
-  call get_command_argument(1, inp_file_name)
-  call get_command_argument(2, out_file_name)
-
-  print *, separator
-  print *, " Input file: ", trim(inp_file_name)
-  print *, "Output file: ", trim(out_file_name)
-  print *, separator
+  call process_arguments()
 
   call chem_mod_read_molecule_from_file(molecule, inp_file_name)
 
   open(unit=out_file_unit, file=out_file_name, action="write")
+
   call write_geometry()
   call write_distances()
   call write_angles()
   call write_out_of_plane_angles()
   call write_torsional_angles()
+
   call translate_molecule_to_center_of_mass()
-
-  print *, "Calculating moment of inertia tensor..."
-  moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
+  call calculate_moment_of_inertia_tensor()
   call write_moment_of_inertia_tensor()
-
-  print *, "Calculating principal moments of inertia..."
-  call fcl_lapack_dsyev(moment_of_inertia_tensor, principal_moments_of_inertia, .false.)
+  call calculate_principal_moments_of_inertia()
   call write_principal_moments_of_inertia()
   
   call classify_rotor()
-
-  print *, "Calculating rotational constants..."
-  ! Convert moments of inertia to SI units
-  principal_moments_of_inertia = principal_moments_of_inertia * amu_to_kg * bohr_to_m ** 2
-  ! Calculate rotational constants in SI units
-  rotational_constants = planck_constant / (8 * pi ** 2 * speed_of_light_in_vacuum * principal_moments_of_inertia)
+  call calculate_rotational_constants()
   call write_rotational_constants()
 
   close(unit=out_file_unit)
-  print *, separator
 
 contains
 
@@ -251,5 +232,38 @@ contains
       tab, "B = ", rotational_constants(2) * centi, &
       tab, "C = ", rotational_constants(3) * centi
   end subroutine write_rotational_constants
+
+  subroutine process_arguments()
+    if (command_argument_count() /= 2) then
+      print *, "Provide input and output file names."
+      stop
+    end if
+
+    call get_command_argument(1, inp_file_name)
+    call get_command_argument(2, out_file_name)
+
+    print *, separator
+    print *, " Input file: ", trim(inp_file_name)
+    print *, "Output file: ", trim(out_file_name)
+    print *, separator
+  end subroutine
+
+  subroutine calculate_moment_of_inertia_tensor()
+    print *, "Calculating moment of inertia tensor..."
+    moment_of_inertia_tensor = molecule%moment_of_inertia_tensor()
+  end subroutine
+
+  subroutine calculate_principal_moments_of_inertia()
+    print *, "Calculating principal moments of inertia..."
+    call fcl_lapack_dsyev(moment_of_inertia_tensor, principal_moments_of_inertia, .false.)
+  end subroutine
+
+  subroutine calculate_rotational_constants()
+    print *, "Calculating rotational constants..."
+    ! Convert moments of inertia to SI units
+    principal_moments_of_inertia = principal_moments_of_inertia * amu_to_kg * bohr_to_m ** 2
+    ! Calculate rotational constants in SI units
+    rotational_constants = planck_constant / (8 * pi ** 2 * speed_of_light_in_vacuum * principal_moments_of_inertia)
+  end subroutine
 
 end program project_01
